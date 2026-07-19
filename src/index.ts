@@ -15,18 +15,22 @@ program.command('add')
     .option("-p, --protein <grams>", "protein in grams", parseFloat)
     .option("-c, --carbs <grams>", "carbs in grams", parseFloat)
     .option("-f, --fats <grams>", "fats in grams", parseFloat)
-    .option("--cals <kcals>", "meal calories", parseFloat)
+    .option("--cals <cals>", "meal calories", parseFloat)
     .action(async (title: string, options: { protein: number, fats: number, carbs: number, cals: number }) => {
-        if (!options.carbs) {
+        if (options.carbs === undefined) {
             console.log(chalk.yellowBright(`Missing carbs value`))
             process.exit(1)
         }
-        if (!options.fats) {
+        if (options.fats === undefined) {
             console.log(chalk.yellowBright(`Missing fats value`))
             process.exit(1)
         }
-        if (!options.protein) {
+        if (options.protein === undefined) {
             console.log(chalk.yellowBright(`Missing protein value`))
+            process.exit(1)
+        }
+        if (options.cals === undefined) {
+            console.log(chalk.yellowBright(`Missing cals value`))
             process.exit(1)
         }
         const data = await readData();
