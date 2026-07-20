@@ -5,7 +5,7 @@ import { join } from "path"
 import { MealsData } from "./types"
 
 // Where our data lives
-const DATA_DIR = join(homedir(), ".macro-track")
+const DATA_DIR = process.env.MACRO_TRACK_DIR ?? join(homedir(), ".macro-track")
 const DATA_FILE = join(DATA_DIR, "macros.json")
 
 export const defaultData = (): MealsData => ({
