@@ -1,18 +1,17 @@
 #!/usr/bin/env -S npx tsx
-import { Command } from "commander"
-import { defaultData, readData, writeData } from "./storage.js"
-import { type Meal } from "./types.js";
-
+import { Command, InvalidArgumentError } from "commander"
 import chalk from "chalk"
-import { InvalidArgumentError } from "commander"
+
+import { addMeal, clearMeals, listMeals, formatAdded, formatMeal } from "./commands.js"
+import { validateGrams } from "./validate.js"
+import { runMenu } from "./menu.js"
 
 const program = new Command()
 
 const parseGrams = (value: string) => {
-    const n = Number(value)
-    if (Number.isNaN(n)) throw new InvalidArgumentError(`"${value}" is not a number`)
-    if (n < 0) throw new InvalidArgumentError(`must be zero or positive`)
-    return n
+    const error = validateGrams(value)
+    if (error) throw new InvalidArgumentError(error)
+    return Number(value.trim())
 }
 
 program
@@ -34,42 +33,42 @@ program.command('add')
             program.error(chalk.yellowBright(`Missing ${missingOptions.join(", ")} value`))
         }
 
-        const data = await readData();
-        const meal: Meal = {
-            id: data.nextId,
-            title: title,
-            cals: options.kcals,
+        const meal = await addMeal({
+            title,
             protein: options.protein,
             carbs: options.carbs,
             fats: options.fats,
-            createdAt: new Date().toISOString(),
-        }
-        data.meals.push(meal)
-        data.nextId += 1;
-        await writeData(data);
-        console.log(chalk.green(`✓ Added meal: ${title} : Protein: ${options.protein} - Fats: ${options.fats} - Carbs: ${options.carbs} - Calories: ${options.kcals}`))
+            kcals: options.kcals,
+        })
+        console.log(formatAdded(meal))
     })
 
 program.command('list')
     .description("List all meals")
     .action(async () => {
-        const data = await readData();
-        if (data.meals.length === 0)
+        const meals = await listMeals();
+        if (meals.length === 0)
             console.log(chalk.red(`You have no meals to show`))
 
-        for (const meal of data.meals) {
-            console.log(chalk.green(`✓ Found meal: ${meal.title} : Protein: ${meal.protein} - Fats: ${meal.fats} - Carbs: ${meal.carbs}`))
+        for (const meal of meals) {
+            console.log(formatMeal(meal))
         }
     })
 
 program.command('clear')
     .description("Clear all meals")
     .action(async () => {
-        const data = await readData();
-        if (data.meals.length === 0)
+        const meals = await listMeals();
+        if (meals.length === 0)
             console.log(chalk.red(`You have no meals to clear, add a meal first`))
-        await writeData(defaultData())
+        await clearMeals()
         console.log(chalk.green(`You cleared all your meals`))
     })
 
-program.parse()
+// No arguments means a bare `macro-track`, so open the menu. Anything else
+// stays on the flag path, which is what scripts and the test suite use.
+if (process.argv.length <= 2) {
+    await runMenu()
+} else {
+    program.parse()
+}
