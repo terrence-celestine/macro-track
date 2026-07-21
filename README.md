@@ -41,12 +41,38 @@ npm start -- add "ground beef" -p 14 -c 20 -f 6 --kcals 200
 
 Values must parse as non-negative numbers. Anything else is rejected at parse time with the offending flag and value named. Missing flags are reported together in a single error.
 
+### `today`
+
+Running totals for the local day, followed by the meals behind them.
+
+```bash
+npm start -- today
+```
+
+```
+Today — 2 meals
+  Calories: 400
+  Protein:  18.5g
+  Carbs:    65g
+  Fats:     7g
+
+✓ Found meal: ground beef : Protein: 14 - Fats: 6 - Carbs: 20
+✓ Found meal: rice : Protein: 4.5 - Fats: 1 - Carbs: 45
+```
+
+An empty day prints zeros rather than nothing, so the command always answers the question it was asked.
+
 ### `list`
 
-Print every meal on record.
+Print today's meals.
+
+| Flag | Alias | Description |
+| --- | --- | --- |
+| `--all` | `-a` | Every meal on record, not just today's |
 
 ```bash
 npm start -- list
+npm start -- list --all
 ```
 
 ### `clear`
@@ -117,7 +143,7 @@ TypeScript, Node, [commander](https://github.com/tj/commander.js) for parsing, [
 
 - [x] `Macros` shared type across meals, goals, and daily totals
 - [x] Local-date field on meals so evening meals aren't filed under the next UTC day
-- [ ] `today` — running totals for the local day
+- [x] `today` — running totals for the local day
 - [ ] `goal set` — daily macro targets, stored in the data file
 - [ ] `today` against goals — remaining macros and a `hit` verdict
 - [ ] Day records — totals, goals snapshot, and a `hit` verdict frozen per day

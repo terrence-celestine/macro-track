@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { execFile } from "child_process"
 import { promisify } from "util"
-import { mkdtemp, rm, readFile } from "fs/promises"
+import { mkdtemp, rm, readFile, writeFile } from "fs/promises"
 import { tmpdir } from "os"
 import { join, resolve } from "path"
 
@@ -230,6 +230,106 @@ describe("list", () => {
 
         expect(await readData()).toEqual(before)
     })
+
+    it("shows only today by default", async () => {
+        await run(...ADD_ARGS)
+        await run("add", "rice", "-p", "4", "-c", "45", "-f", "1", "-k", "200")
+
+        const data = await readData()
+        data.meals[0].localDate = "2020-01-01"
+        await writeFile(join(dataDir, "macros.json"), JSON.stringify(data), "utf-8")
+
+        const { stdout } = await run("list")
+
+        expect(stdout).not.toContain("ground beef")
+        expect(stdout).toContain("rice")
+    })
+
+    it("shows every meal with --all", async () => {
+        await run(...ADD_ARGS)
+        await run("add", "rice", "-p", "4", "-c", "45", "-f", "1", "-k", "200")
+
+        const data = await readData()
+        data.meals[0].localDate = "2020-01-01"
+        await writeFile(join(dataDir, "macros.json"), JSON.stringify(data), "utf-8")
+
+        const { stdout } = await run("list", "--all")
+
+        expect(stdout).toContain("ground beef")
+        expect(stdout).toContain("rice")
+    })
+
+    it("supports the -a short flag", async () => {
+        await run(...ADD_ARGS)
+
+        const data = await readData()
+        data.meals[0].localDate = "2020-01-01"
+        await writeFile(join(dataDir, "macros.json"), JSON.stringify(data), "utf-8")
+
+        const { stdout } = await run("list", "-a")
+
+        expect(stdout).toContain("ground beef")
+    })
+})
+
+describe("today", () => {
+    it("exits 0 with nothing logged", async () => {
+        const { code, stdout } = await run("today")
+
+        expect(code).toBe(0)
+        expect(stdout).toContain("Nothing logged yet today")
+    })
+
+    it("shows zeros rather than an empty block on a blank day", async () => {
+        const { stdout } = await run("today")
+
+        expect(stdout).toContain("0 meals")
+    })
+
+    it("sums the day's macros", async () => {
+        await run(...ADD_ARGS)
+        await run("add", "rice", "-p", "4", "-c", "45", "-f", "1", "-k", "200")
+
+        const { stdout } = await run("today")
+
+        expect(stdout).toContain("2 meals")
+        expect(stdout).toContain("400")   // calories
+        expect(stdout).toContain("18")    // protein
+        expect(stdout).toContain("65")    // carbs
+    })
+
+    it("lists the day's meals under the totals", async () => {
+        await run(...ADD_ARGS)
+
+        const { stdout } = await run("today")
+
+        expect(stdout).toContain("ground beef")
+        expect(stdout.indexOf("Calories")).toBeLessThan(stdout.indexOf("ground beef"))
+    })
+
+    it("ignores meals from other days", async () => {
+        await run(...ADD_ARGS)
+
+        // Rewrite the stored meal onto a different local day, which is what a
+        // meal logged yesterday looks like on disk.
+        const data = await readData()
+        data.meals[0].localDate = "2020-01-01"
+        await writeFile(join(dataDir, "macros.json"), JSON.stringify(data), "utf-8")
+
+        const { stdout } = await run("today")
+
+        expect(stdout).toContain("Nothing logged yet today")
+        expect(stdout).not.toContain("ground beef")
+    })
+
+    it("leaves the data file unchanged", async () => {
+        await run(...ADD_ARGS)
+        const before = await readData()
+
+        await run("today")
+
+        expect(await readData()).toEqual(before)
+    })
 })
 
 describe("clear", () => {
@@ -273,6 +373,7 @@ describe("program", () => {
         expect(stdout).toContain("add")
         expect(stdout).toContain("list")
         expect(stdout).toContain("clear")
+        expect(stdout).toContain("today")
     })
 
     it("prints a version", async () => {

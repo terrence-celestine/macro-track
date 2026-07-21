@@ -1,17 +1,24 @@
 /**
  * The interactive main menu, shown when macro-track is run with no arguments.
  *
- * Runs one action and exits. The flag interface (`macro-track add ...`) is
- * unchanged and remains the scriptable path.
+ * The flag interface (`macro-track add ...`) is unchanged and remains the
+ * scriptable path.
+ *
+ * The menu's "list" means all-time, while the `list` command defaults to today.
+ * They differ deliberately: the menu already has a Today entry directly above
+ * it, so a today-scoped list there would just be a worse Today.
  */
 
 import { intro, outro, select, text, isCancel, cancel, log } from "@clack/prompts"
 import chalk from "chalk"
 
-import { addMeal, clearMeals, listMeals, formatAdded, formatMeal } from "./commands.js"
+import {
+    addMeal, clearMeals, listMeals, todaysMeals, sumMacros,
+    formatAdded, formatMeal, formatTotals,
+} from "./commands.js"
 import { validateGrams } from "./validate.js"
 
-type Action = "add" | "list" | "clear" | "exit"
+type Action = "today" | "add" | "list" | "clear" | "exit"
 
 /**
  * clack returns a cancel symbol rather than throwing when the user hits Ctrl+C,
@@ -55,6 +62,19 @@ async function runAdd(): Promise<void> {
     log.success(formatAdded(meal))
 }
 
+async function runToday(): Promise<void> {
+    const meals = await todaysMeals()
+
+    log.message(formatTotals(sumMacros(meals), meals.length).join("\n"))
+
+    if (meals.length === 0) {
+        log.warn(chalk.red("Nothing logged yet today"))
+        return
+    }
+
+    for (const meal of meals) log.message(formatMeal(meal))
+}
+
 async function runList(): Promise<void> {
     const meals = await listMeals()
 
@@ -83,8 +103,9 @@ const promptAction = async (): Promise<Action> =>
         await select<Action>({
             message: "What do you want to do?",
             options: [
+                { value: "today", label: "Today", hint: "running totals and today's meals" },
                 { value: "add", label: "Add a meal", hint: "log protein, carbs, fats, calories" },
-                { value: "list", label: "List meals", hint: "everything logged so far" },
+                { value: "list", label: "All meals", hint: "everything logged so far" },
                 { value: "clear", label: "Clear meals", hint: "wipe the log and reset ids" },
                 { value: "exit", label: "Exit" },
             ],
@@ -105,6 +126,9 @@ export const runMenu = async (): Promise<void> => {
         const action = await promptAction()
 
         switch (action) {
+            case "today":
+                await runToday()
+                break
             case "add":
                 await runAdd()
                 break

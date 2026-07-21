@@ -2,7 +2,10 @@
 import { Command, InvalidArgumentError } from "commander"
 import chalk from "chalk"
 
-import { addMeal, clearMeals, listMeals, formatAdded, formatMeal } from "./commands.js"
+import {
+    addMeal, clearMeals, listMeals, todaysMeals, sumMacros,
+    formatAdded, formatMeal, formatTotals,
+} from "./commands.js"
 import { validateGrams } from "./validate.js"
 import { runMenu } from "./menu.js"
 
@@ -43,10 +46,32 @@ program.command('add')
         console.log(formatAdded(meal))
     })
 
-program.command('list')
-    .description("List all meals")
+program.command('today')
+    .description("Today's running totals and meals")
     .action(async () => {
-        const meals = await listMeals();
+        const meals = await todaysMeals()
+
+        for (const line of formatTotals(sumMacros(meals), meals.length)) {
+            console.log(line)
+        }
+
+        if (meals.length === 0) {
+            console.log(chalk.red(`Nothing logged yet today`))
+            return
+        }
+
+        console.log()
+        for (const meal of meals) {
+            console.log(formatMeal(meal))
+        }
+    })
+
+program.command('list')
+    .description("List today's meals")
+    .option("-a, --all", "every meal on record, not just today's")
+    .action(async (options: { all?: boolean }) => {
+        const meals = options.all ? await listMeals() : await todaysMeals()
+
         if (meals.length === 0)
             console.log(chalk.red(`You have no meals to show`))
 

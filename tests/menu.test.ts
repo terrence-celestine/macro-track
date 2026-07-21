@@ -352,6 +352,58 @@ describe("menu: list", () => {
     })
 })
 
+describe("menu: today", () => {
+    it("prints totals with nothing logged", async () => {
+        queueSelect("today", "exit")
+
+        await (await loadMenu())()
+
+        expect(mocks.logWarn).toHaveBeenCalledWith(expect.stringContaining("Nothing logged yet today"))
+    })
+
+    it("sums today's meals", async () => {
+        const { todayLocalDate } = await import("../src/date.js")
+        const today = todayLocalDate()
+        await seed({
+            meals: [
+                meal({ localDate: today }),
+                meal({ id: 2, title: "rice", protein: 4, carbs: 45, fats: 1, cals: 200, localDate: today }),
+            ],
+            nextId: 3,
+        })
+        queueSelect("today", "exit")
+
+        await (await loadMenu())()
+
+        const printed = mocks.logMessage.mock.calls.map(([line]) => line).join("\n")
+        expect(printed).toContain("2 meals")
+        expect(printed).toContain("400")
+        expect(printed).toContain("18")
+    })
+
+    it("excludes meals from other days", async () => {
+        await seed({ meals: [meal({ localDate: "2020-01-01" })], nextId: 2 })
+        queueSelect("today", "exit")
+
+        await (await loadMenu())()
+
+        expect(mocks.logWarn).toHaveBeenCalledWith(expect.stringContaining("Nothing logged yet today"))
+        const printed = mocks.logMessage.mock.calls.map(([line]) => line).join("\n")
+        expect(printed).not.toContain("ground beef")
+    })
+
+    it("lists today's meals after the totals", async () => {
+        const { todayLocalDate } = await import("../src/date.js")
+        await seed({ meals: [meal({ localDate: todayLocalDate() })], nextId: 2 })
+        queueSelect("today", "exit")
+
+        await (await loadMenu())()
+
+        const printed = mocks.logMessage.mock.calls.map(([line]) => line).join("\n")
+        expect(printed.indexOf("Calories")).toBeLessThan(printed.indexOf("ground beef"))
+    })
+})
+
 describe("menu: clear", () => {
     it("removes all meals and resets the counter", async () => {
         await seed({ meals: [meal(), meal({ id: 2, title: "rice" })], nextId: 3 })
