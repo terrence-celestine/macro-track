@@ -9,7 +9,7 @@ const DATA_DIR = process.env.MACRO_TRACK_DIR ?? join(homedir(), ".macro-track")
 const DATA_FILE = join(DATA_DIR, "macros.json")
 
 export const defaultData = (): MealsData => ({
-    meals: [], nextId: 1, goals: {}, days: []
+    meals: [], nextId: 1, goals: {}, days: [], favorites: []
 })
 
 /**

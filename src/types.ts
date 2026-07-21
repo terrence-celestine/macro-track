@@ -44,10 +44,25 @@ export type DayRecord = {
     closedAt: string
 }
 
+/**
+ * A saved meal you log repeatedly.
+ *
+ * Holds its own copy of the macros rather than pointing at the meal it came
+ * from. The source meal can be edited, deleted, or frozen into a day record —
+ * a favourite has to keep working through all of that, so it stops being
+ * connected to the original the moment it's created.
+ */
+export type Favorite = Macros & {
+    /** How you refer to it: `repeat beef`. Unique, matched case-insensitively. */
+    name: string
+    createdAt: string
+}
+
 // The shape of the whole data file
 export type MealsData = {
     meals: Meal[]
     nextId: number
     goals: Goals
     days: DayRecord[]
+    favorites: Favorite[]
 }

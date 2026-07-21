@@ -15,15 +15,17 @@ import chalk from "chalk"
 import {
     addMeal, clearMeals, listMeals, todaysMeals, sumMacros,
     getGoals, setGoals, openMeals, deleteMeal, editMeal,
+    repeatFavorite, addFavorite, getFavorites,
     formatAdded, formatMeal, formatTotals, formatGoals, formatHistory,
     formatDeleted, formatDeleteFailure, formatEdited, formatEditFailure,
+    formatRepeated, formatFavorited, formatFavoriteFailure,
     type MealEdit,
 } from "./commands.js"
 import { getHistory } from "./days.js"
 import { validateGrams } from "./validate.js"
 import { type Goals, type Meal } from "./types.js"
 
-type Action = "today" | "add" | "edit" | "delete" | "goals" | "history" | "list" | "clear" | "exit"
+type Action = "today" | "add" | "repeat" | "favorite" | "edit" | "delete" | "goals" | "history" | "list" | "clear" | "exit"
 
 /**
  * clack returns a cancel symbol rather than throwing when the user hits Ctrl+C,
@@ -137,6 +139,83 @@ async function pickOpenMeal(message: string): Promise<Meal | null> {
     return meals.find(meal => meal.id === id)!
 }
 
+async function runRepeat(): Promise<void> {
+    const favorites = await getFavorites()
+
+    if (favorites.length === 0) {
+        log.warn(chalk.red("No favorites yet — save one from a logged meal first"))
+        return
+    }
+
+    const name = exitIfCancelled(
+        await select<string>({
+            message: "Log which favorite?",
+            options: favorites.map(favorite => ({
+                value: favorite.name,
+                label: favorite.name,
+                hint: `${favorite.cals} kcal · P ${favorite.protein}g · C ${favorite.carbs}g · F ${favorite.fats}g`,
+            })),
+        }),
+    )
+
+    const result = await repeatFavorite(name)
+
+    // No confirm: this adds rather than destroys, and a stray copy is one
+    // delete away.
+    if (!result.ok) {
+        log.warn(chalk.red(`No favorite called "${name}".`))
+        return
+    }
+
+    log.success(formatRepeated(result.meal))
+}
+
+/**
+ * Saves one of today's meals as a favourite.
+ *
+ * Scoped to today because you favourite something just after logging it. The
+ * `favorite add <id>` command takes any meal id for the rarer case.
+ */
+async function runSaveFavorite(): Promise<void> {
+    const meals = await todaysMeals()
+
+    if (meals.length === 0) {
+        log.warn(chalk.red("Nothing logged today to save"))
+        return
+    }
+
+    const id = exitIfCancelled(
+        await select<number>({
+            message: "Save which meal?",
+            options: meals.map(meal => ({
+                value: meal.id,
+                label: meal.title,
+                hint: `${meal.cals} kcal · P ${meal.protein}g · C ${meal.carbs}g · F ${meal.fats}g`,
+            })),
+        }),
+    )
+
+    const chosen = meals.find(meal => meal.id === id)!
+
+    // Blank keeps the meal's title, same convention as the other prompts.
+    const name = exitIfCancelled(
+        await text({
+            message: "Call it what?",
+            placeholder: chosen.title,
+            defaultValue: "",
+        }),
+    ).trim()
+
+    const result = await addFavorite(id, name === "" ? undefined : name)
+
+    if (!result.ok) {
+        log.warn(formatFavoriteFailure(result.reason, id, name))
+        return
+    }
+
+    log.success(formatFavorited(result.favorite))
+}
+
 async function runEdit(): Promise<void> {
     const chosen = await pickOpenMeal("Edit which meal?")
 
@@ -235,6 +314,8 @@ const promptAction = async (): Promise<Action> =>
             options: [
                 { value: "today", label: "Today", hint: "running totals and today's meals" },
                 { value: "add", label: "Add a meal", hint: "log protein, carbs, fats, calories" },
+                { value: "repeat", label: "Log a favorite", hint: "one of your saved meals" },
+                { value: "favorite", label: "Save a favorite", hint: "keep one of today's meals for later" },
                 { value: "edit", label: "Edit a meal", hint: "fix a title or the macros" },
                 { value: "delete", label: "Delete a meal", hint: "remove one entry" },
                 { value: "goals", label: "Set goals", hint: "daily targets — blank keeps the current value" },
@@ -265,6 +346,12 @@ export const runMenu = async (): Promise<void> => {
                 break
             case "add":
                 await runAdd()
+                break
+            case "repeat":
+                await runRepeat()
+                break
+            case "favorite":
+                await runSaveFavorite()
                 break
             case "edit":
                 await runEdit()

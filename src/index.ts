@@ -5,8 +5,10 @@ import chalk from "chalk"
 import {
     addMeal, clearMeals, listMeals, todaysMeals, sumMacros, deleteMeal, editMeal,
     getGoals, setGoals, clearGoals,
+    repeatFavorite, addFavorite, removeFavorite, getFavorites,
     formatAdded, formatMeal, formatTotals, formatGoals, formatHistory,
     formatDeleted, formatDeleteFailure, formatEdited, formatEditFailure,
+    formatRepeated, formatFavorited, formatFavorites, formatFavoriteFailure,
 } from "./commands.js"
 import { closeStaleDays, getHistory } from "./days.js"
 import { validateGrams } from "./validate.js"
@@ -155,6 +157,57 @@ program.command('list')
         for (const meal of meals) {
             console.log(formatMeal(meal))
         }
+    })
+
+program.command('repeat')
+    .description("Log a saved favorite onto today")
+    .argument("<name>", "the favorite's name, as shown by `favorite list`")
+    .action(async (name: string) => {
+        const result = await repeatFavorite(name)
+
+        if (!result.ok) {
+            fail(chalk.red(`No favorite called "${name}". Run \`favorite list\` to see them.`))
+        }
+
+        console.log(formatRepeated(result.meal))
+    })
+
+const favorite = program.command('favorite')
+    .description("Meals you log often")
+
+favorite.command('add')
+    .description("Save a logged meal as a favorite")
+    .argument("<id>", "the meal id, as shown by `list --all`", parseGrams)
+    .option("--as <name>", "what to call it (defaults to the meal's title)")
+    .action(async (id: number, options: { as?: string }) => {
+        // Any meal works, including one from a recorded day — this reads the
+        // meal and writes a separate row, so nothing frozen is touched.
+        const result = await addFavorite(id, options.as)
+
+        if (!result.ok) {
+            fail(formatFavoriteFailure(result.reason, id, options.as))
+        }
+
+        console.log(formatFavorited(result.favorite))
+    })
+
+favorite.command('list')
+    .description("Print your saved favorites")
+    .action(async () => {
+        for (const line of formatFavorites(await getFavorites())) {
+            console.log(line)
+        }
+    })
+
+favorite.command('remove')
+    .description("Forget a favorite")
+    .argument("<name>", "the favorite's name")
+    .action(async (name: string) => {
+        if (!await removeFavorite(name)) {
+            fail(chalk.red(`No favorite called "${name}".`))
+        }
+
+        console.log(chalk.green(`✓ Removed favorite: ${name}`))
     })
 
 program.command('edit')

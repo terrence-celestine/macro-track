@@ -133,6 +133,38 @@ npm start -- list
 npm start -- list --all
 ```
 
+### `favorite add <id>` / `favorite list` / `favorite remove <name>`
+
+Save a meal you log often, so you never retype its macros again.
+
+| Flag | Description |
+| --- | --- |
+| `--as <name>` | What to call it (defaults to the meal's title) |
+
+```bash
+npm start -- favorite add 3 --as beef
+npm start -- favorite list
+npm start -- favorite remove beef
+```
+
+Names are matched case-insensitively and ignoring surrounding space, so `repeat Beef` finds `beef`. A duplicate name is refused rather than overwritten — silently replacing the macros behind a name you already use would change what every future `repeat` logs without telling you. Use `--as` to pick another.
+
+Any meal id works, including one from a recorded day: this reads the meal and writes a separate row, so nothing frozen is touched.
+
+**A favorite is a snapshot, not a pointer.** It copies the macros at save time and stops being connected to the meal it came from. Delete that meal, or edit it, and the favorite keeps logging what it was saved with. Anything else would mean editing one dinner silently rewrote a shortcut you use every day.
+
+### `repeat <name>`
+
+Log a favorite onto today.
+
+```bash
+npm start -- repeat beef
+```
+
+The new meal gets a fresh id, a fresh timestamp and today's local date, exactly as if you'd typed it by hand. The favorite stays saved.
+
+In the menu, **Log a favorite** picks from your saved list, and **Save a favorite** keeps one of today's meals for later.
+
 ### `edit <id>`
 
 Change a meal's title or macros. Every flag is optional and only the fields you name change, same merge semantics as `goal set`. Passing no flags is an error rather than a silent no-op.
@@ -196,6 +228,16 @@ Meals are stored as JSON at `~/.macro-track/macros.json`:
   ],
   "nextId": 2,
   "goals": { "protein": 180, "cals": 2000 },
+  "favorites": [
+    {
+      "name": "beef",
+      "protein": 14,
+      "carbs": 20,
+      "fats": 6,
+      "cals": 200,
+      "createdAt": "2026-07-19T14:32:05.123Z"
+    }
+  ],
   "days": [
     {
       "date": "2026-07-18",
@@ -257,5 +299,7 @@ TypeScript, Node, [commander](https://github.com/tj/commander.js) for parsing, [
 - [x] Lazy day close on the first command of a new day
 - [x] `delete <id>` — remove a single meal, so a typo doesn't need `clear`
 - [x] `edit <id>` — fix a meal's macros without deleting and re-adding
+- [x] Favorites — named, saved meals logged with `repeat <name>`
+- [ ] Weight tracking — the third thing this README claims to track
 
 Goal direction is settled: protein is a floor, everything else is a ceiling. Not configurable, by decision rather than by omission.
