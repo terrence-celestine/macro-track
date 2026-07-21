@@ -1,5 +1,6 @@
 #!/usr/bin/env -S npx tsx
 import { Command, InvalidArgumentError } from "commander"
+import { isTTY } from "@clack/prompts"
 import chalk from "chalk"
 
 import {
@@ -269,10 +270,16 @@ program.command('clear')
 // read-only.
 await closeStaleDays()
 
-// No arguments means a bare `macro-track`, so open the menu. Anything else
-// stays on the flag path, which is what scripts and the test suite use.
+// No arguments means a bare `macro-track`, so open the menu — but only on a
+// real terminal. clack reads keypresses from stdin, so in a cron job, a script,
+// or anything piped, the menu would sit forever waiting for input that never
+// arrives. Printing help is the useful thing to do there instead.
 if (process.argv.length <= 2) {
-    await runMenu()
+    if (isTTY(process.stdin)) {
+        await runMenu()
+    } else {
+        program.help()
+    }
 } else {
     program.parse()
 }

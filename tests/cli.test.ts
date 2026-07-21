@@ -861,6 +861,38 @@ describe("clear", () => {
     })
 })
 
+describe("no arguments without a terminal", () => {
+    /**
+     * The subprocess runner never gives the child a TTY, so these run through
+     * exactly the path a cron job or a pipe would take.
+     */
+    it("prints help instead of hanging", async () => {
+        // Regression: the menu used to open regardless, and clack would then
+        // wait forever for keypresses from a stdin that has none.
+        const { stdout } = await run()
+
+        expect(stdout).toContain("Usage: macro-track")
+    })
+
+    it("exits 0", async () => {
+        expect((await run()).code).toBe(0)
+    })
+
+    it("lists the commands", async () => {
+        const { stdout } = await run()
+
+        expect(stdout).toContain("add")
+        expect(stdout).toContain("today")
+        expect(stdout).toContain("repeat")
+    })
+
+    it("writes nothing", async () => {
+        await run()
+
+        await expect(readData()).rejects.toThrow()
+    })
+})
+
 describe("program", () => {
     it("exits non-zero on an unknown command", async () => {
         const { code } = await run("frobnicate")

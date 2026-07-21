@@ -208,6 +208,12 @@ Delete all meals and reset the ID counter.
 npm start -- clear
 ```
 
+## The interactive menu
+
+Running `macro-track` with no arguments opens an arrow-key menu — but only when stdin is a terminal. In a cron job, a script, or anything piped, it prints help instead. The menu reads keypresses, so without a terminal it would otherwise wait forever for input that never arrives.
+
+Prompt sequences (add, edit, goals) run through clack's `group`, so Ctrl+C at any step ends the session through a single handler rather than each prompt checking for itself.
+
 ## Data
 
 Meals are stored as JSON at `~/.macro-track/macros.json`:

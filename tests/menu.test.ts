@@ -47,6 +47,35 @@ vi.mock("@clack/prompts", () => ({
     select: mocks.select,
     text: mocks.text,
     confirm: mocks.confirm,
+
+    /**
+     * A stand-in for clack's `group`: run each step in order, stop at the first
+     * cancel and hand control to onCancel.
+     *
+     * This is a reimplementation, which is the one place these tests knowingly
+     * trade fidelity for control — if clack changes group's contract, this mock
+     * keeps passing. The end-to-end pty run in the notes is what actually
+     * exercises the real one.
+     */
+    group: async (
+        steps: Record<string, (arg: { results: Record<string, unknown> }) => Promise<unknown>>,
+        options?: { onCancel?: (arg: { results: Record<string, unknown> }) => void },
+    ) => {
+        const results: Record<string, unknown> = {}
+
+        for (const [key, step] of Object.entries(steps)) {
+            const value = await step({ results })
+
+            if (value === CANCEL) {
+                options?.onCancel?.({ results })
+                return results
+            }
+
+            results[key] = value
+        }
+
+        return results
+    },
 }))
 
 let dataDir: string

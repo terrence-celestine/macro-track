@@ -9,7 +9,7 @@
  * it, so a today-scoped list there would just be a worse Today.
  */
 
-import { intro, outro, select, text, confirm, isCancel, cancel, log } from "@clack/prompts"
+import { intro, outro, select, text, confirm, group, isCancel, cancel, log } from "@clack/prompts"
 import chalk from "chalk"
 
 import {
@@ -28,73 +28,95 @@ import { type Goals, type Meal } from "./types.js"
 type Action = "today" | "add" | "repeat" | "favorite" | "edit" | "delete" | "goals" | "history" | "list" | "clear" | "exit"
 
 /**
- * clack returns a cancel symbol rather than throwing when the user hits Ctrl+C,
- * so every prompt result has to be checked. This narrows the type and bails out
- * cleanly in one place.
+ * Ctrl+C at any prompt ends the session.
+ *
+ * clack signals cancellation by returning a symbol rather than throwing, so it
+ * has to be handled explicitly. `group` gives one hook for a whole sequence;
+ * standalone prompts still go through exitIfCancelled below.
  */
+const cancelSession = (): never => {
+    cancel("Cancelled.")
+    process.exit(0)
+}
+
+/** The single-prompt equivalent of group's onCancel. */
 function exitIfCancelled<T>(value: T | symbol): T {
-    if (isCancel(value)) {
-        cancel("Cancelled.")
-        process.exit(0)
-    }
+    if (isCancel(value)) cancelSession()
     return value as T
 }
 
-async function promptGrams(label: string): Promise<number> {
-    const value = exitIfCancelled(
-        await text({
-            message: label,
-            placeholder: "0",
-            validate: (input) => validateGrams(input ?? ""),
-        }),
-    )
-    return Number(value.trim())
-}
-
-async function runAdd(): Promise<void> {
-    const title = exitIfCancelled(
-        await text({
-            message: "What did you eat?",
-            placeholder: "ground beef",
-            validate: (input) => (input?.trim() ? undefined : "Enter a meal name"),
-        }),
-    ).trim()
-
-    const protein = await promptGrams("Protein (g)")
-    const carbs = await promptGrams("Carbs (g)")
-    const fats = await promptGrams("Fats (g)")
-    const kcals = await promptGrams("Calories")
-
-    const meal = await addMeal({ title, protein, carbs, fats, kcals })
-    log.success(formatAdded(meal))
-}
+/** A required macro amount. Returned as text; group callers convert. */
+const gramsPrompt = (label: string) =>
+    text({
+        message: label,
+        placeholder: "0",
+        validate: (input) => validateGrams(input ?? ""),
+    })
 
 /**
- * Prompts for one target, pre-filled with the current value. Blank means "leave
+ * An optional amount, pre-filled with the current value. Blank means "leave
  * this one alone", which is how the menu expresses the same partial-merge the
  * `goal set` flags give you — you can change protein without restating the rest.
  */
-async function promptGoal(label: string, current: number | undefined): Promise<number | undefined> {
-    const value = exitIfCancelled(
-        await text({
-            message: label,
-            placeholder: current === undefined ? "not set — leave blank to skip" : `${current}`,
-            defaultValue: "",
-            validate: (input) => (input?.trim() ? validateGrams(input) : undefined),
-        }),
+const optionalGramsPrompt = (label: string, current: number | undefined) =>
+    text({
+        message: label,
+        placeholder: current === undefined ? "not set — leave blank to skip" : `${current}`,
+        defaultValue: "",
+        validate: (input) => (input?.trim() ? validateGrams(input) : undefined),
+    })
+
+/** Blank answers mean "unchanged", so they become undefined rather than 0. */
+const optionalNumber = (value: string): number | undefined =>
+    value.trim() === "" ? undefined : Number(value.trim())
+
+async function runAdd(): Promise<void> {
+    // group runs the sequence and routes a cancel at any step to one handler,
+    // instead of every prompt needing its own check.
+    const answers = await group(
+        {
+            title: () => text({
+                message: "What did you eat?",
+                placeholder: "ground beef",
+                validate: (input) => (input?.trim() ? undefined : "Enter a meal name"),
+            }),
+            protein: () => gramsPrompt("Protein (g)"),
+            carbs: () => gramsPrompt("Carbs (g)"),
+            fats: () => gramsPrompt("Fats (g)"),
+            kcals: () => gramsPrompt("Calories"),
+        },
+        { onCancel: cancelSession },
     )
 
-    return value.trim() === "" ? undefined : Number(value.trim())
+    const meal = await addMeal({
+        title: answers.title.trim(),
+        protein: Number(answers.protein),
+        carbs: Number(answers.carbs),
+        fats: Number(answers.fats),
+        kcals: Number(answers.kcals),
+    })
+
+    log.success(formatAdded(meal))
 }
 
 async function runGoals(): Promise<void> {
     const current = await getGoals()
 
+    const answers = await group(
+        {
+            cals: () => optionalGramsPrompt("Calorie target", current.cals),
+            protein: () => optionalGramsPrompt("Protein target (g)", current.protein),
+            carbs: () => optionalGramsPrompt("Carbs target (g)", current.carbs),
+            fats: () => optionalGramsPrompt("Fats target (g)", current.fats),
+        },
+        { onCancel: cancelSession },
+    )
+
     const update: Goals = {
-        cals: await promptGoal("Calorie target", current.cals),
-        protein: await promptGoal("Protein target (g)", current.protein),
-        carbs: await promptGoal("Carbs target (g)", current.carbs),
-        fats: await promptGoal("Fats target (g)", current.fats),
+        cals: optionalNumber(answers.cals),
+        protein: optionalNumber(answers.protein),
+        carbs: optionalNumber(answers.carbs),
+        fats: optionalNumber(answers.fats),
     }
 
     log.message(formatGoals(await setGoals(update)).join("\n"))
@@ -225,20 +247,23 @@ async function runEdit(): Promise<void> {
     }
 
     // Blank keeps the current value, same convention as the goal prompts.
-    const title = exitIfCancelled(
-        await text({
-            message: "Title",
-            placeholder: chosen.title,
-            defaultValue: "",
-        }),
-    ).trim()
+    const answers = await group(
+        {
+            title: () => text({ message: "Title", placeholder: chosen.title, defaultValue: "" }),
+            cals: () => optionalGramsPrompt("Calories", chosen.cals),
+            protein: () => optionalGramsPrompt("Protein (g)", chosen.protein),
+            carbs: () => optionalGramsPrompt("Carbs (g)", chosen.carbs),
+            fats: () => optionalGramsPrompt("Fats (g)", chosen.fats),
+        },
+        { onCancel: cancelSession },
+    )
 
     const update: MealEdit = {
-        title: title === "" ? undefined : title,
-        cals: await promptGoal("Calories", chosen.cals),
-        protein: await promptGoal("Protein (g)", chosen.protein),
-        carbs: await promptGoal("Carbs (g)", chosen.carbs),
-        fats: await promptGoal("Fats (g)", chosen.fats),
+        title: answers.title.trim() === "" ? undefined : answers.title.trim(),
+        cals: optionalNumber(answers.cals),
+        protein: optionalNumber(answers.protein),
+        carbs: optionalNumber(answers.carbs),
+        fats: optionalNumber(answers.fats),
     }
 
     const result = await editMeal(chosen.id, update)
