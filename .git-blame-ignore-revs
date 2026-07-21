@@ -1,0 +1,15 @@
+# Revisions to skip when running `git blame`.
+#
+# Bulk reformats only — commits that changed how the code looks and nothing
+# about what it does. Without this, blame on almost every line points here
+# instead of at the change that actually introduced the logic.
+#
+# GitHub honours this file automatically. Locally, opt in once with:
+#
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Add the full 40-character hash of the reformat commit below once it exists.
+# A short hash or a missing commit makes git blame fail outright, so add it
+# only after committing.
+
+# Adopt Prettier defaults across the codebase

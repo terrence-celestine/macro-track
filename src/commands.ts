@@ -10,23 +10,58 @@
  */
 
 export {
-    type MealInput, type MealFailure, type MealResult, type MealEdit,
-    addMeal, listMeals, openMeals, deleteMeal, editMeal,
-    mealsOn, todaysMeals, clearMeals, sumMacros,
-} from "./meals.js"
+  type MealInput,
+  type MealFailure,
+  type MealResult,
+  type MealEdit,
+  addMeal,
+  listMeals,
+  openMeals,
+  deleteMeal,
+  editMeal,
+  mealsOn,
+  todaysMeals,
+  clearMeals,
+  sumMacros,
+} from "./meals.js";
 
 export {
-    type FavoriteFailure, type AddFavoriteResult, type RepeatResult,
-    getFavorites, findFavorite, addFavorite, removeFavorite, repeatFavorite,
-} from "./favorites.js"
+  type FavoriteFailure,
+  type AddFavoriteResult,
+  type RepeatResult,
+  getFavorites,
+  findFavorite,
+  addFavorite,
+  removeFavorite,
+  repeatFavorite,
+} from "./favorites.js";
+
+export { getGoals, hasGoals, setGoals, clearGoals } from "./goals.js";
 
 export {
-    getGoals, hasGoals, setGoals, clearGoals,
-} from "./goals.js"
+  TREND_WINDOW,
+  getWeights,
+  recordWeight,
+  removeWeight,
+  trailingAverage,
+  trailingChange,
+} from "./weight.js";
 
 export {
-    formatAdded, formatRepeated, formatEdited, formatDeleted, formatMeal,
-    formatMealFailure, formatDeleteFailure, formatEditFailure,
-    formatFavorited, formatFavoriteFailure, formatFavorites,
-    formatTotals, formatGoals, formatHistory,
-} from "./format.js"
+  formatAdded,
+  formatRepeated,
+  formatEdited,
+  formatDeleted,
+  formatMeal,
+  formatMealFailure,
+  formatDeleteFailure,
+  formatEditFailure,
+  formatFavorited,
+  formatFavoriteFailure,
+  formatFavorites,
+  formatTotals,
+  formatGoals,
+  formatHistory,
+  formatWeighed,
+  formatWeights,
+} from "./format.js";

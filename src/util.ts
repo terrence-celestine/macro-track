@@ -11,6 +11,6 @@
  * both need this first.
  */
 export const definedOnly = <T extends object>(update: T): Partial<T> =>
-    Object.fromEntries(
-        Object.entries(update).filter(([, value]) => value !== undefined),
-    ) as Partial<T>
+  Object.fromEntries(
+    Object.entries(update).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;

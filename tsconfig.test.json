@@ -1,18 +1,11 @@
 {
-    // Tests are checked separately from src because they must never end up in
-    // a build. The base config's `include` is what a compile would emit; this
-    // one is check-only and additionally covers tests and config files.
-    "extends": "./tsconfig.json",
-    "compilerOptions": {
-        "noEmit": true,
-        "types": [
-            "node",
-            "vitest/globals"
-        ]
-    },
-    "include": [
-        "src/**/*.ts",
-        "tests/**/*.ts",
-        "vitest.config.ts"
-    ]
+  // Tests are checked separately from src because they must never end up in
+  // a build. The base config's `include` is what a compile would emit; this
+  // one is check-only and additionally covers tests and config files.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
 }

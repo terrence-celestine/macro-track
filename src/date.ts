@@ -11,7 +11,7 @@
  * `localDate` is the day bucket.
  */
 
-const pad = (n: number): string => String(n).padStart(2, "0")
+const pad = (n: number): string => String(n).padStart(2, "0");
 
 /**
  * Formats a Date as YYYY-MM-DD in the machine's local timezone.
@@ -21,7 +21,7 @@ const pad = (n: number): string => String(n).padStart(2, "0")
  * plain string, which is why it is not stored as a Date.
  */
 export const toLocalDate = (d: Date): string =>
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 /** The current local day, as YYYY-MM-DD. */
-export const todayLocalDate = (): string => toLocalDate(new Date())
+export const todayLocalDate = (): string => toLocalDate(new Date());

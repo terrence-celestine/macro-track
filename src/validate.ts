@@ -10,12 +10,12 @@
 
 /** Returns an error message, or undefined if the value is a valid gram amount. */
 export function validateGrams(value: string): string | undefined {
-    const trimmed = value.trim()
-    if (trimmed === "") return "Enter a number"
+  const trimmed = value.trim();
+  if (trimmed === "") return "Enter a number";
 
-    // Number() rather than parseFloat(): parseFloat("12abc") silently returns 12.
-    const n = Number(trimmed)
-    if (Number.isNaN(n)) return `"${value}" is not a number`
-    if (n < 0) return "must be zero or positive"
-    return undefined
+  // Number() rather than parseFloat(): parseFloat("12abc") silently returns 12.
+  const n = Number(trimmed);
+  if (Number.isNaN(n)) return `"${value}" is not a number`;
+  if (n < 0) return "must be zero or positive";
+  return undefined;
 }

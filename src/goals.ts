@@ -6,17 +6,18 @@
  * handle a field being absent.
  */
 
-import { readData, writeData } from "./storage.js"
-import { definedOnly } from "./util.js"
-import { type Goals } from "./types.js"
+import { readData, writeData } from "./storage.js";
+import { definedOnly } from "./util.js";
+import { type Goals } from "./types.js";
 
 export const getGoals = async (): Promise<Goals> => {
-    const data = await readData()
-    return data.goals
-}
+  const data = await readData();
+  return data.goals;
+};
 
 /** True when no macro has a target yet. */
-export const hasGoals = (goals: Goals): boolean => Object.keys(goals).length > 0
+export const hasGoals = (goals: Goals): boolean =>
+  Object.keys(goals).length > 0;
 
 /**
  * Merges a partial goal into whatever is already stored.
@@ -26,16 +27,16 @@ export const hasGoals = (goals: Goals): boolean => Object.keys(goals).length > 0
  * quietly erase the protein goal it was never asked to touch.
  */
 export const setGoals = async (update: Goals): Promise<Goals> => {
-    const data = await readData()
+  const data = await readData();
 
-    data.goals = { ...data.goals, ...definedOnly(update) }
-    await writeData(data)
+  data.goals = { ...data.goals, ...definedOnly(update) };
+  await writeData(data);
 
-    return data.goals
-}
+  return data.goals;
+};
 
 export const clearGoals = async (): Promise<void> => {
-    const data = await readData()
-    data.goals = {}
-    await writeData(data)
-}
+  const data = await readData();
+  data.goals = {};
+  await writeData(data);
+};
