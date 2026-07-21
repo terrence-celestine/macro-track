@@ -20,8 +20,10 @@ const mocks = vi.hoisted(() => {
     return {
         selectQueue: [] as unknown[],
         textQueue: [] as unknown[],
+        confirmQueue: [] as unknown[],
         select: vi.fn(),
         text: vi.fn(),
+        confirm: vi.fn(),
         intro: vi.fn(),
         outro: vi.fn(),
         cancel: vi.fn(),
@@ -44,6 +46,7 @@ vi.mock("@clack/prompts", () => ({
     isCancel: (value: unknown) => value === CANCEL,
     select: mocks.select,
     text: mocks.text,
+    confirm: mocks.confirm,
 }))
 
 let dataDir: string
@@ -61,6 +64,9 @@ const queueSelect = (...values: unknown[]) => mocks.selectQueue.push(...values)
 
 /** Queue the values the text prompt should return, in order. */
 const queueText = (...values: unknown[]) => mocks.textQueue.push(...values)
+
+/** Queue the answers the confirm prompt should return, in order. */
+const queueConfirm = (...values: unknown[]) => mocks.confirmQueue.push(...values)
 
 /**
  * storage.ts reads MACRO_TRACK_DIR once at import time, so the env var has to
@@ -110,6 +116,7 @@ beforeEach(async () => {
 
     mocks.selectQueue.length = 0
     mocks.textQueue.length = 0
+    mocks.confirmQueue.length = 0
     vi.clearAllMocks()
 
     mocks.select.mockImplementation(async () => {
@@ -119,6 +126,10 @@ beforeEach(async () => {
     mocks.text.mockImplementation(async () => {
         if (mocks.textQueue.length === 0) throw new Error("text called more times than queued")
         return mocks.textQueue.shift()
+    })
+    mocks.confirm.mockImplementation(async () => {
+        if (mocks.confirmQueue.length === 0) throw new Error("confirm called more times than queued")
+        return mocks.confirmQueue.shift()
     })
 
     exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
@@ -478,6 +489,181 @@ describe("menu: today against goals", () => {
         const printed = mocks.logMessage.mock.calls.map(([line]) => line).join("\n")
         expect(printed).toContain("166")
         expect(printed).toContain("left")
+    })
+})
+
+describe("menu: delete", () => {
+    const closedDay = (date: string) => ({
+        date,
+        totals: { protein: 14, carbs: 20, fats: 6, cals: 200 },
+        goals: {},
+        hit: null,
+        mealCount: 1,
+        closedAt: "2026-07-20T00:00:00.000Z",
+    })
+
+    it("says so when there is nothing deletable", async () => {
+        queueSelect("delete", "exit")
+
+        await (await loadMenu())()
+
+        expect(mocks.logWarn).toHaveBeenCalledWith(expect.stringContaining("Nothing to delete"))
+    })
+
+    it("deletes the chosen meal once confirmed", async () => {
+        await seed({ meals: [meal({ id: 1 }), meal({ id: 2, title: "rice" })], nextId: 3 })
+        queueSelect("delete", 1, "exit")
+        queueConfirm(true)
+
+        await (await loadMenu())()
+
+        expect((await readData()).meals.map(m => m.title)).toEqual(["rice"])
+    })
+
+    it("keeps the meal when the confirm is declined", async () => {
+        await seed({ meals: [meal({ id: 1 })], nextId: 2 })
+        queueSelect("delete", 1, "exit")
+        queueConfirm(false)
+
+        await (await loadMenu())()
+
+        expect((await readData()).meals).toHaveLength(1)
+    })
+
+    it("defaults the confirm to no", async () => {
+        await seed({ meals: [meal({ id: 1 })], nextId: 2 })
+        queueSelect("delete", 1, "exit")
+        queueConfirm(false)
+
+        await (await loadMenu())()
+
+        const [opts] = mocks.confirm.mock.calls[0] as [{ initialValue: boolean }]
+        // Enter-by-reflex should not destroy anything.
+        expect(opts.initialValue).toBe(false)
+    })
+
+    it("names the meal in the confirm prompt", async () => {
+        await seed({ meals: [meal({ id: 1, title: "typo meal" })], nextId: 2 })
+        queueSelect("delete", 1, "exit")
+        queueConfirm(false)
+
+        await (await loadMenu())()
+
+        const [opts] = mocks.confirm.mock.calls[0] as [{ message: string }]
+        expect(opts.message).toContain("typo meal")
+    })
+
+    it("does not offer meals from recorded days", async () => {
+        await seed({
+            meals: [
+                meal({ id: 1, localDate: "2026-07-18", title: "locked" }),
+                meal({ id: 2, localDate: "2026-07-19", title: "open" }),
+            ],
+            nextId: 3,
+            days: [closedDay("2026-07-18")],
+        })
+        queueSelect("delete", 2, "exit")
+        queueConfirm(true)
+
+        await (await loadMenu())()
+
+        // The picker is the second select call; the first is the main menu.
+        const [opts] = mocks.select.mock.calls[1] as [{ options: { label: string }[] }]
+        expect(opts.options.map(o => o.label)).toEqual(["open"])
+    })
+
+    it("does not confirm when there is nothing to delete", async () => {
+        queueSelect("delete", "exit")
+
+        await (await loadMenu())()
+
+        expect(mocks.confirm).not.toHaveBeenCalled()
+    })
+})
+
+describe("menu: edit", () => {
+    const closedDay = (date: string) => ({
+        date,
+        totals: { protein: 14, carbs: 20, fats: 6, cals: 200 },
+        goals: {},
+        hit: null,
+        mealCount: 1,
+        closedAt: "2026-07-20T00:00:00.000Z",
+    })
+
+    it("says so when there is nothing editable", async () => {
+        queueSelect("edit", "exit")
+
+        await (await loadMenu())()
+
+        expect(mocks.logWarn).toHaveBeenCalledWith(expect.stringContaining("Nothing to edit"))
+    })
+
+    it("applies the values entered", async () => {
+        await seed({ meals: [meal({ id: 1 })], nextId: 2 })
+        queueSelect("edit", 1, "exit")
+        queueText("chicken", "300", "40", "10", "5")
+
+        await (await loadMenu())()
+
+        expect((await readData()).meals[0]).toMatchObject({
+            title: "chicken", cals: 300, protein: 40, carbs: 10, fats: 5,
+        })
+    })
+
+    it("treats a blank answer as leave-this-alone", async () => {
+        await seed({ meals: [meal({ id: 1 })], nextId: 2 })
+        queueSelect("edit", 1, "exit")
+        queueText("", "", "40", "", "")
+
+        await (await loadMenu())()
+
+        const stored = (await readData()).meals[0]
+        expect(stored.protein).toBe(40)
+        expect(stored.title).toBe("ground beef")
+        expect(stored.cals).toBe(200)
+    })
+
+    it("pre-fills each prompt with the current value", async () => {
+        await seed({ meals: [meal({ id: 1, title: "ground beef", protein: 14 })], nextId: 2 })
+        queueSelect("edit", 1, "exit")
+        queueText("", "", "", "", "")
+
+        await (await loadMenu())()
+
+        const prompts = mocks.text.mock.calls
+            .map(([opts]) => opts as { message: string; placeholder?: string })
+
+        expect(prompts.find(p => p.message === "Title")!.placeholder).toBe("ground beef")
+        expect(prompts.find(p => p.message === "Protein (g)")!.placeholder).toBe("14")
+    })
+
+    it("does not offer meals from recorded days", async () => {
+        await seed({
+            meals: [
+                meal({ id: 1, localDate: "2026-07-18", title: "locked" }),
+                meal({ id: 2, localDate: "2026-07-19", title: "open" }),
+            ],
+            nextId: 3,
+            days: [closedDay("2026-07-18")],
+        })
+        queueSelect("edit", 2, "exit")
+        queueText("", "", "", "", "")
+
+        await (await loadMenu())()
+
+        const [opts] = mocks.select.mock.calls[1] as [{ options: { label: string }[] }]
+        expect(opts.options.map(o => o.label)).toEqual(["open"])
+    })
+
+    it("does not confirm — editing is not destructive", async () => {
+        await seed({ meals: [meal({ id: 1 })], nextId: 2 })
+        queueSelect("edit", 1, "exit")
+        queueText("", "", "", "", "")
+
+        await (await loadMenu())()
+
+        expect(mocks.confirm).not.toHaveBeenCalled()
     })
 })
 

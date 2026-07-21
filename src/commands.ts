@@ -9,7 +9,20 @@
 import chalk from "chalk"
 import { defaultData, readData, writeData } from "./storage.js"
 import { toLocalDate, todayLocalDate } from "./date.js"
-import { type DayRecord, type Goals, type Macros, type Meal } from "./types.js"
+import { type DayRecord, type Goals, type Macros, type Meal, type MealsData } from "./types.js"
+
+/**
+ * Drops keys whose value is undefined.
+ *
+ * Commander hands an action every declared flag as a key, unset ones included,
+ * so spreading its options object straight onto stored data writes `undefined`
+ * over fields the user never mentioned. Both `goal set` and `edit` merge, and
+ * both need this first.
+ */
+const definedOnly = <T extends object>(update: T): Partial<T> =>
+    Object.fromEntries(
+        Object.entries(update).filter(([, value]) => value !== undefined),
+    ) as Partial<T>
 
 export type MealInput = {
     title: string
@@ -49,6 +62,82 @@ export const listMeals = async (): Promise<Meal[]> => {
     return data.meals
 }
 
+/**
+ * Meals on days that have not been frozen into a record yet — the ones still
+ * open to change.
+ *
+ * A meal whose day already has a record is off limits to both delete and edit:
+ * the record's totals were computed from it, and changing the meal would leave
+ * the two disagreeing forever. Rather than offer such meals and reject them,
+ * they are simply not offered — the constraint lives in one place and every
+ * caller inherits it.
+ */
+export const openMeals = async (): Promise<Meal[]> => {
+    const data = await readData()
+    const closed = new Set(data.days.map(day => day.date))
+
+    return data.meals.filter(meal => !closed.has(meal.localDate))
+}
+
+/**
+ * Why a change to a meal could not happen. Returned rather than thrown so each
+ * entry point can phrase the failure its own way — commander wants stderr and a
+ * non-zero exit, clack wants a warning in the menu.
+ */
+export type MealFailure = "not-found" | "day-closed"
+
+export type MealResult =
+    | { ok: true; meal: Meal }
+    | { ok: false; reason: MealFailure }
+
+/** Shared precondition for delete and edit: the meal exists and its day is open. */
+const findOpenMeal = (data: MealsData, id: number): MealResult => {
+    const meal = data.meals.find(candidate => candidate.id === id)
+    if (meal === undefined) return { ok: false, reason: "not-found" }
+
+    const closed = new Set(data.days.map(day => day.date))
+    if (closed.has(meal.localDate)) return { ok: false, reason: "day-closed" }
+
+    return { ok: true, meal }
+}
+
+export const deleteMeal = async (id: number): Promise<MealResult> => {
+    const data = await readData()
+
+    const found = findOpenMeal(data, id)
+    if (!found.ok) return found
+
+    data.meals = data.meals.filter(candidate => candidate.id !== id)
+    // nextId deliberately keeps climbing — reusing a freed id would make a
+    // stale id from an earlier `list` silently point at a different meal.
+    await writeData(data)
+
+    return found
+}
+
+/**
+ * The fields an edit may touch.
+ *
+ * Deliberately excludes id, createdAt and localDate. Editing what you ate must
+ * not move the meal to a different day or renumber it — that would change which
+ * day's totals it counts toward, or break ids someone already copied.
+ */
+export type MealEdit = Partial<Pick<Meal, "title" | "protein" | "carbs" | "fats" | "cals">>
+
+export const editMeal = async (id: number, update: MealEdit): Promise<MealResult> => {
+    const data = await readData()
+
+    const found = findOpenMeal(data, id)
+    if (!found.ok) return found
+
+    // Same merge semantics as `goal set`: only the fields you named change, and
+    // undefined means "leave alone" rather than "blank it".
+    Object.assign(found.meal, definedOnly(update))
+    await writeData(data)
+
+    return found
+}
+
 /** Meals belonging to one local calendar day, YYYY-MM-DD. */
 export const mealsOn = async (date: string): Promise<Meal[]> => {
     const data = await readData()
@@ -85,11 +174,7 @@ export const hasGoals = (goals: Goals): boolean => Object.keys(goals).length > 0
 export const setGoals = async (update: Goals): Promise<Goals> => {
     const data = await readData()
 
-    const provided = Object.fromEntries(
-        Object.entries(update).filter(([, value]) => value !== undefined),
-    ) as Goals
-
-    data.goals = { ...data.goals, ...provided }
+    data.goals = { ...data.goals, ...definedOnly(update) }
     await writeData(data)
 
     return data.goals
@@ -124,6 +209,26 @@ export const formatAdded = (meal: Meal): string => {
         `✓ Added meal: ${meal.title} : Protein: ${meal.protein} - Fats: ${meal.fats} - Carbs: ${meal.carbs} - Calories: ${meal.cals}`,
     )
 }
+
+export const formatDeleted = (meal: Meal): string =>
+    chalk.green(`✓ Deleted meal: ${meal.title} (id ${meal.id})`)
+
+export const formatEdited = (meal: Meal): string =>
+    chalk.green(
+        `✓ Updated meal: ${meal.title} : Protein: ${meal.protein} - Fats: ${meal.fats} - Carbs: ${meal.carbs} - Calories: ${meal.cals}`,
+    )
+
+/** Why a change failed, in words. The verb differs, the reasons do not. */
+export const formatMealFailure = (id: number, reason: MealFailure, verb: string): string =>
+    reason === "not-found"
+        ? chalk.red(`No meal with id ${id}. Run \`list\` to see the ids.`)
+        : chalk.yellowBright(`Meal ${id} belongs to a day that's already recorded, so it can't be ${verb}.`)
+
+export const formatDeleteFailure = (id: number, reason: MealFailure): string =>
+    formatMealFailure(id, reason, "deleted")
+
+export const formatEditFailure = (id: number, reason: MealFailure): string =>
+    formatMealFailure(id, reason, "edited")
 
 export const formatMeal = (meal: Meal): string => {
     return chalk.green(

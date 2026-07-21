@@ -9,19 +9,21 @@
  * it, so a today-scoped list there would just be a worse Today.
  */
 
-import { intro, outro, select, text, isCancel, cancel, log } from "@clack/prompts"
+import { intro, outro, select, text, confirm, isCancel, cancel, log } from "@clack/prompts"
 import chalk from "chalk"
 
 import {
     addMeal, clearMeals, listMeals, todaysMeals, sumMacros,
-    getGoals, setGoals,
+    getGoals, setGoals, openMeals, deleteMeal, editMeal,
     formatAdded, formatMeal, formatTotals, formatGoals, formatHistory,
+    formatDeleted, formatDeleteFailure, formatEdited, formatEditFailure,
+    type MealEdit,
 } from "./commands.js"
 import { getHistory } from "./days.js"
 import { validateGrams } from "./validate.js"
-import { type Goals } from "./types.js"
+import { type Goals, type Meal } from "./types.js"
 
-type Action = "today" | "add" | "goals" | "history" | "list" | "clear" | "exit"
+type Action = "today" | "add" | "edit" | "delete" | "goals" | "history" | "list" | "clear" | "exit"
 
 /**
  * clack returns a cancel symbol rather than throwing when the user hits Ctrl+C,
@@ -109,6 +111,96 @@ async function runToday(): Promise<void> {
     for (const meal of meals) log.message(formatMeal(meal))
 }
 
+/**
+ * Picks one meal that is still open to change.
+ *
+ * Meals from a recorded day are not shown at all rather than shown and refused
+ * — there is nothing useful you could do with them here. Returns null when
+ * there is nothing to pick, so the caller can explain rather than show an
+ * empty list.
+ */
+async function pickOpenMeal(message: string): Promise<Meal | null> {
+    const meals = await openMeals()
+    if (meals.length === 0) return null
+
+    const id = exitIfCancelled(
+        await select<number>({
+            message,
+            options: meals.map(meal => ({
+                value: meal.id,
+                label: meal.title,
+                hint: `${meal.cals} kcal · P ${meal.protein}g · C ${meal.carbs}g · F ${meal.fats}g`,
+            })),
+        }),
+    )
+
+    return meals.find(meal => meal.id === id)!
+}
+
+async function runEdit(): Promise<void> {
+    const chosen = await pickOpenMeal("Edit which meal?")
+
+    if (chosen === null) {
+        log.warn(chalk.red("Nothing to edit — logged days that are already recorded can't be changed"))
+        return
+    }
+
+    // Blank keeps the current value, same convention as the goal prompts.
+    const title = exitIfCancelled(
+        await text({
+            message: "Title",
+            placeholder: chosen.title,
+            defaultValue: "",
+        }),
+    ).trim()
+
+    const update: MealEdit = {
+        title: title === "" ? undefined : title,
+        cals: await promptGoal("Calories", chosen.cals),
+        protein: await promptGoal("Protein (g)", chosen.protein),
+        carbs: await promptGoal("Carbs (g)", chosen.carbs),
+        fats: await promptGoal("Fats (g)", chosen.fats),
+    }
+
+    const result = await editMeal(chosen.id, update)
+
+    if (!result.ok) {
+        log.warn(formatEditFailure(chosen.id, result.reason))
+        return
+    }
+
+    log.success(formatEdited(result.meal))
+}
+
+async function runDelete(): Promise<void> {
+    const chosen = await pickOpenMeal("Delete which meal?")
+
+    if (chosen === null) {
+        log.warn(chalk.red("Nothing to delete — logged days that are already recorded can't be changed"))
+        return
+    }
+
+    const id = chosen.id
+
+    const confirmed = exitIfCancelled(
+        await confirm({ message: `Delete "${chosen.title}"?`, initialValue: false }),
+    )
+
+    if (!confirmed) {
+        log.message(chalk.dim("Left it alone."))
+        return
+    }
+
+    const result = await deleteMeal(id)
+
+    if (!result.ok) {
+        log.warn(formatDeleteFailure(id, result.reason))
+        return
+    }
+
+    log.success(formatDeleted(result.meal))
+}
+
 async function runHistory(): Promise<void> {
     log.message(formatHistory(await getHistory(7)).join("\n"))
 }
@@ -143,6 +235,8 @@ const promptAction = async (): Promise<Action> =>
             options: [
                 { value: "today", label: "Today", hint: "running totals and today's meals" },
                 { value: "add", label: "Add a meal", hint: "log protein, carbs, fats, calories" },
+                { value: "edit", label: "Edit a meal", hint: "fix a title or the macros" },
+                { value: "delete", label: "Delete a meal", hint: "remove one entry" },
                 { value: "goals", label: "Set goals", hint: "daily targets — blank keeps the current value" },
                 { value: "history", label: "History", hint: "the last 7 closed days" },
                 { value: "list", label: "All meals", hint: "everything logged so far" },
@@ -171,6 +265,12 @@ export const runMenu = async (): Promise<void> => {
                 break
             case "add":
                 await runAdd()
+                break
+            case "edit":
+                await runEdit()
+                break
+            case "delete":
+                await runDelete()
                 break
             case "goals":
                 await runGoals()

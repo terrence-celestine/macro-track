@@ -16,9 +16,12 @@ import { type DayRecord, type Goals, type Macros, type Meal } from "./types.js"
  * Which way each target points.
  *
  * Protein is a minimum — eating more than the target is a win. The other three
- * are maximums. This is a hardcoded convention rather than per-goal config; if
- * it ever needs to vary per user, the direction has to move into the stored
- * goal and existing records need migrating.
+ * are maximums.
+ *
+ * Fixed by decision, not by omission: this doesn't vary in practice, and making
+ * it configurable would mean a direction field on every stored goal plus a
+ * migration for existing day records. If that ever changes, those are the two
+ * costs to plan for.
  */
 export const GOAL_DIRECTION = {
     protein: "min",

@@ -557,6 +557,169 @@ describe("history", () => {
     })
 })
 
+describe("edit", () => {
+    it("changes one macro and exits 0", async () => {
+        await run(...ADD_ARGS)
+
+        const { code, stdout } = await run("edit", "1", "-p", "40")
+
+        expect(code).toBe(0)
+        expect(stdout).toContain("40")
+        expect((await readData()).meals[0].protein).toBe(40)
+    })
+
+    it("leaves the other macros alone", async () => {
+        await run(...ADD_ARGS)
+        await run("edit", "1", "-p", "40")
+
+        expect((await readData()).meals[0]).toMatchObject({ carbs: 20, fats: 6, cals: 200 })
+    })
+
+    it("changes the title", async () => {
+        await run(...ADD_ARGS)
+        await run("edit", "1", "--title", "chicken thigh")
+
+        expect((await readData()).meals[0].title).toBe("chicken thigh")
+    })
+
+    it("keeps id, createdAt and localDate", async () => {
+        await run(...ADD_ARGS)
+        const before = (await readData()).meals[0]
+
+        await run("edit", "1", "-p", "40")
+
+        const after = (await readData()).meals[0]
+        expect(after.id).toBe(before.id)
+        expect(after.createdAt).toBe(before.createdAt)
+        expect(after.localDate).toBe(before.localDate)
+    })
+
+    it("rejects an edit with no flags", async () => {
+        await run(...ADD_ARGS)
+
+        const { code, stderr } = await run("edit", "1")
+
+        expect(code).not.toBe(0)
+        expect(stderr).toContain("at least one")
+    })
+
+    it("exits non-zero for an unknown id", async () => {
+        const { code, stderr } = await run("edit", "99", "-p", "40")
+
+        expect(code).not.toBe(0)
+        expect(stderr).toContain("99")
+    })
+
+    it("validates macros the same way add does", async () => {
+        await run(...ADD_ARGS)
+
+        expect((await run("edit", "1", "-p", "abc")).code).not.toBe(0)
+        expect((await run("edit", "1", "-p", "-4")).code).not.toBe(0)
+        expect((await run("edit", "1", "-p", "12abc")).code).not.toBe(0)
+    })
+
+    it("refuses a meal from a recorded day", async () => {
+        await run(...ADD_ARGS)
+        await backdateMeals("2020-01-01")
+        await run("history")
+
+        const { code, stderr } = await run("edit", "1", "-p", "40")
+
+        expect(code).not.toBe(0)
+        expect(stderr).toContain("edited")
+        expect((await readData()).meals[0].protein).toBe(14)
+    })
+
+    it("is reflected in today's totals", async () => {
+        await run(...ADD_ARGS)
+        await run("edit", "1", "-p", "40")
+
+        expect((await run("today")).stdout).toContain("40")
+    })
+})
+
+describe("delete", () => {
+    it("removes the meal and exits 0", async () => {
+        await run(...ADD_ARGS)
+        await run("add", "rice", "-p", "4", "-c", "45", "-f", "1", "-k", "200")
+
+        const { code, stdout } = await run("delete", "1")
+
+        expect(code).toBe(0)
+        expect(stdout).toContain("ground beef")
+        expect((await readData()).meals.map(m => m.title)).toEqual(["rice"])
+    })
+
+    it("exits non-zero for an unknown id", async () => {
+        await run(...ADD_ARGS)
+
+        const { code, stderr } = await run("delete", "99")
+
+        expect(code).not.toBe(0)
+        expect(stderr).toContain("99")
+    })
+
+    it("reports failures on stderr, not stdout", async () => {
+        await run(...ADD_ARGS)
+
+        const { stdout, stderr } = await run("delete", "99")
+
+        expect(stderr.trim()).not.toBe("")
+        expect(stdout).not.toContain("99")
+    })
+
+    it("rejects a non-numeric id", async () => {
+        const { code } = await run("delete", "abc")
+
+        expect(code).not.toBe(0)
+    })
+
+    it("requires an id", async () => {
+        const { code } = await run("delete")
+
+        expect(code).not.toBe(0)
+    })
+
+    it("refuses a meal from a day that is already recorded", async () => {
+        await run(...ADD_ARGS)
+        await backdateMeals("2020-01-01")
+        await run("history")   // closes 2020-01-01
+
+        const { code, stderr } = await run("delete", "1")
+
+        expect(code).not.toBe(0)
+        expect(stderr).toContain("recorded")
+        expect((await readData()).meals).toHaveLength(1)
+    })
+
+    it("does not disturb the frozen record", async () => {
+        await run(...ADD_ARGS)
+        await backdateMeals("2020-01-01")
+        await run("history")
+
+        await run("delete", "1")
+
+        const [record] = (await readData()).days
+        expect(record.totals).toEqual({ protein: 14, carbs: 20, fats: 6, cals: 200 })
+    })
+
+    it("removes the meal from today's totals", async () => {
+        await run(...ADD_ARGS)
+
+        await run("delete", "1")
+
+        expect((await run("today")).stdout).toContain("Nothing logged yet today")
+    })
+
+    it("does not reuse the freed id", async () => {
+        await run(...ADD_ARGS)
+        await run("delete", "1")
+        await run("add", "rice", "-p", "4", "-c", "45", "-f", "1", "-k", "200")
+
+        expect((await readData()).meals[0].id).toBe(2)
+    })
+})
+
 describe("clear", () => {
     it("removes all meals and resets the counter", async () => {
         await run(...ADD_ARGS)

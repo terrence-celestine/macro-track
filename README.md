@@ -77,7 +77,7 @@ The verdict has three states, not two:
 | `✗` | At least one target missed |
 | `–` | No goals were set that day — unjudged, not failed |
 
-Direction is a fixed convention rather than per-goal configuration. Making it configurable later means adding a field to stored goals and migrating existing records.
+Direction is a fixed convention, deliberately not configurable. Making it per-goal would mean a direction field on every stored goal, a migration for existing records, and more flags to learn — for a distinction that doesn't vary in practice.
 
 ### `goal set`
 
@@ -132,6 +132,41 @@ Print today's meals.
 npm start -- list
 npm start -- list --all
 ```
+
+### `edit <id>`
+
+Change a meal's title or macros. Every flag is optional and only the fields you name change, same merge semantics as `goal set`. Passing no flags is an error rather than a silent no-op.
+
+| Flag | Alias | Description |
+| --- | --- | --- |
+| `--title <title>` | `-t` | The meal title |
+| `--protein <grams>` | `-p` | Protein in grams |
+| `--carbs <grams>` | `-c` | Carbs in grams |
+| `--fats <grams>` | `-f` | Fats in grams |
+| `--kcals <cals>` | `-k` | Calories |
+
+```bash
+npm start -- edit 3 -p 45              # carbs, fats and calories are kept
+npm start -- edit 3 --title "chicken thigh"
+```
+
+An edit never touches the meal's `id`, `createdAt` or `localDate`. Moving a meal to another day would silently shift it into a different day's totals, and renumbering would break ids you'd already copied from `list`.
+
+Like `delete`, meals from recorded days can't be edited — see below.
+
+### `delete <id>`
+
+Remove a single meal. Ids come from `list`.
+
+```bash
+npm start -- delete 3
+```
+
+No confirmation prompt — this is the scriptable path, and one meal is cheap to re-add. The interactive menu confirms instead, and defaults to "no".
+
+**Meals from recorded days can't be deleted or edited.** Once a day is closed, its frozen totals were computed from those meals; changing one would leave the record describing something that no longer exists. Both commands refuse with an explanation, and the menu's pickers don't list such meals at all — the rule lives in one place (`openMeals`) and every caller inherits it.
+
+Ids are never reused. Deleting meal 3 and adding another gives you 4, so an id you copied from an earlier `list` can never quietly point at a different meal.
 
 ### `clear`
 
@@ -220,5 +255,7 @@ TypeScript, Node, [commander](https://github.com/tj/commander.js) for parsing, [
 - [x] `today` against goals — remaining macros per target
 - [x] Day records — totals, goals snapshot, and a `hit` verdict frozen per day
 - [x] Lazy day close on the first command of a new day
-- [ ] `delete <id>` — remove a single meal, so a typo doesn't need `clear`
-- [ ] Per-goal direction, if the protein-floor convention ever stops fitting
+- [x] `delete <id>` — remove a single meal, so a typo doesn't need `clear`
+- [x] `edit <id>` — fix a meal's macros without deleting and re-adding
+
+Goal direction is settled: protein is a floor, everything else is a ceiling. Not configurable, by decision rather than by omission.
