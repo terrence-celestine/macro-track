@@ -14,11 +14,14 @@ import chalk from "chalk"
 
 import {
     addMeal, clearMeals, listMeals, todaysMeals, sumMacros,
-    formatAdded, formatMeal, formatTotals,
+    getGoals, setGoals,
+    formatAdded, formatMeal, formatTotals, formatGoals, formatHistory,
 } from "./commands.js"
+import { getHistory } from "./days.js"
 import { validateGrams } from "./validate.js"
+import { type Goals } from "./types.js"
 
-type Action = "today" | "add" | "list" | "clear" | "exit"
+type Action = "today" | "add" | "goals" | "history" | "list" | "clear" | "exit"
 
 /**
  * clack returns a cancel symbol rather than throwing when the user hits Ctrl+C,
@@ -62,10 +65,41 @@ async function runAdd(): Promise<void> {
     log.success(formatAdded(meal))
 }
 
+/**
+ * Prompts for one target, pre-filled with the current value. Blank means "leave
+ * this one alone", which is how the menu expresses the same partial-merge the
+ * `goal set` flags give you — you can change protein without restating the rest.
+ */
+async function promptGoal(label: string, current: number | undefined): Promise<number | undefined> {
+    const value = exitIfCancelled(
+        await text({
+            message: label,
+            placeholder: current === undefined ? "not set — leave blank to skip" : `${current}`,
+            defaultValue: "",
+            validate: (input) => (input?.trim() ? validateGrams(input) : undefined),
+        }),
+    )
+
+    return value.trim() === "" ? undefined : Number(value.trim())
+}
+
+async function runGoals(): Promise<void> {
+    const current = await getGoals()
+
+    const update: Goals = {
+        cals: await promptGoal("Calorie target", current.cals),
+        protein: await promptGoal("Protein target (g)", current.protein),
+        carbs: await promptGoal("Carbs target (g)", current.carbs),
+        fats: await promptGoal("Fats target (g)", current.fats),
+    }
+
+    log.message(formatGoals(await setGoals(update)).join("\n"))
+}
+
 async function runToday(): Promise<void> {
     const meals = await todaysMeals()
 
-    log.message(formatTotals(sumMacros(meals), meals.length).join("\n"))
+    log.message(formatTotals(sumMacros(meals), meals.length, await getGoals()).join("\n"))
 
     if (meals.length === 0) {
         log.warn(chalk.red("Nothing logged yet today"))
@@ -73,6 +107,10 @@ async function runToday(): Promise<void> {
     }
 
     for (const meal of meals) log.message(formatMeal(meal))
+}
+
+async function runHistory(): Promise<void> {
+    log.message(formatHistory(await getHistory(7)).join("\n"))
 }
 
 async function runList(): Promise<void> {
@@ -105,6 +143,8 @@ const promptAction = async (): Promise<Action> =>
             options: [
                 { value: "today", label: "Today", hint: "running totals and today's meals" },
                 { value: "add", label: "Add a meal", hint: "log protein, carbs, fats, calories" },
+                { value: "goals", label: "Set goals", hint: "daily targets — blank keeps the current value" },
+                { value: "history", label: "History", hint: "the last 7 closed days" },
                 { value: "list", label: "All meals", hint: "everything logged so far" },
                 { value: "clear", label: "Clear meals", hint: "wipe the log and reset ids" },
                 { value: "exit", label: "Exit" },
@@ -131,6 +171,12 @@ export const runMenu = async (): Promise<void> => {
                 break
             case "add":
                 await runAdd()
+                break
+            case "goals":
+                await runGoals()
+                break
+            case "history":
+                await runHistory()
                 break
             case "list":
                 await runList()

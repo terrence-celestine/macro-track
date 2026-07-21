@@ -4,8 +4,10 @@ import chalk from "chalk"
 
 import {
     addMeal, clearMeals, listMeals, todaysMeals, sumMacros,
-    formatAdded, formatMeal, formatTotals,
+    getGoals, setGoals, clearGoals,
+    formatAdded, formatMeal, formatTotals, formatGoals, formatHistory,
 } from "./commands.js"
+import { closeStaleDays, getHistory } from "./days.js"
 import { validateGrams } from "./validate.js"
 import { runMenu } from "./menu.js"
 
@@ -46,12 +48,64 @@ program.command('add')
         console.log(formatAdded(meal))
     })
 
+program.command('history')
+    .description("Closed days, most recent first")
+    .option("-d, --days <count>", "how many days to show", parseGrams, 7)
+    .action(async (options: { days: number }) => {
+        for (const line of formatHistory(await getHistory(options.days))) {
+            console.log(line)
+        }
+    })
+
+const goal = program.command('goal')
+    .description("Daily macro targets")
+
+goal.command('set')
+    .description("Set or update daily targets — any subset of the four")
+    .option("-p, --protein <grams>", "protein in grams", parseGrams)
+    .option("-c, --carbs <grams>", "carbs in grams", parseGrams)
+    .option("-f, --fats <grams>", "fats in grams", parseGrams)
+    .option("-k --kcals <cals>", "calorie target", parseGrams)
+    .action(async (options: { protein?: number, fats?: number, carbs?: number, kcals?: number }) => {
+        const update = {
+            protein: options.protein,
+            carbs: options.carbs,
+            fats: options.fats,
+            cals: options.kcals,
+        }
+
+        // Merging nothing into the stored goals would report success while
+        // changing nothing, which reads as a silent failure.
+        if (Object.values(update).every(value => value === undefined)) {
+            program.error(chalk.yellowBright(`Set at least one of --protein, --carbs, --fats, --kcals`))
+        }
+
+        for (const line of formatGoals(await setGoals(update))) {
+            console.log(line)
+        }
+    })
+
+goal.command('show')
+    .description("Print the current targets")
+    .action(async () => {
+        for (const line of formatGoals(await getGoals())) {
+            console.log(line)
+        }
+    })
+
+goal.command('clear')
+    .description("Remove all targets")
+    .action(async () => {
+        await clearGoals()
+        console.log(chalk.green(`Cleared your goals`))
+    })
+
 program.command('today')
     .description("Today's running totals and meals")
     .action(async () => {
         const meals = await todaysMeals()
 
-        for (const line of formatTotals(sumMacros(meals), meals.length)) {
+        for (const line of formatTotals(sumMacros(meals), meals.length, await getGoals())) {
             console.log(line)
         }
 
@@ -89,6 +143,12 @@ program.command('clear')
         await clearMeals()
         console.log(chalk.green(`You cleared all your meals`))
     })
+
+// Lazy day close: the first command run on a new day freezes the ones before
+// it. Done here rather than per-command so every entry point gets it, and it
+// writes nothing when there is nothing stale, so read-only commands stay
+// read-only.
+await closeStaleDays()
 
 // No arguments means a bare `macro-track`, so open the menu. Anything else
 // stays on the flag path, which is what scripts and the test suite use.

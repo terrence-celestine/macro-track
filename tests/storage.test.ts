@@ -48,7 +48,7 @@ const makeMeal = (over: Partial<MealsData["meals"][number]> = {}) => ({
 describe("readData", () => {
     it("returns defaults when the file does not exist", async () => {
         const data = await storage.readData()
-        expect(data).toEqual({ meals: [], nextId: 1 })
+        expect(data).toEqual({ meals: [], nextId: 1, goals: {}, days: [] })
     })
 
     it("creates the data directory so a later write can succeed", async () => {
@@ -63,19 +63,19 @@ describe("readData", () => {
 
     it("returns defaults when the file is empty", async () => {
         await writeFile(dataFile, "", "utf-8")
-        expect(await storage.readData()).toEqual({ meals: [], nextId: 1 })
+        expect(await storage.readData()).toEqual({ meals: [], nextId: 1, goals: {}, days: [] })
     })
 
     it("returns defaults when the file is only whitespace", async () => {
         await writeFile(dataFile, "   \n  ", "utf-8")
-        expect(await storage.readData()).toEqual({ meals: [], nextId: 1 })
+        expect(await storage.readData()).toEqual({ meals: [], nextId: 1, goals: {}, days: [] })
     })
 
     it("warns and returns defaults when the file is malformed JSON", async () => {
         const warn = vi.spyOn(console, "error").mockImplementation(() => {})
         await writeFile(dataFile, "{ not json", "utf-8")
 
-        expect(await storage.readData()).toEqual({ meals: [], nextId: 1 })
+        expect(await storage.readData()).toEqual({ meals: [], nextId: 1, goals: {}, days: [] })
         expect(warn).toHaveBeenCalled()
 
         warn.mockRestore()
@@ -94,9 +94,9 @@ describe("readData", () => {
 
     it("reads back what was written", async () => {
         const meal = makeMeal()
-        await storage.writeData({ meals: [meal], nextId: 2 })
+        await storage.writeData({ meals: [meal], nextId: 2, goals: {}, days: [] })
 
-        expect(await storage.readData()).toEqual({ meals: [meal], nextId: 2 })
+        expect(await storage.readData()).toEqual({ meals: [meal], nextId: 2, goals: {}, days: [] })
     })
 
     it("fills in keys missing from the file", async () => {
@@ -140,7 +140,7 @@ describe("shared state", () => {
         a.meals.push(makeMeal())
         a.nextId = 12
 
-        expect(storage.defaultData()).toEqual({ meals: [], nextId: 1 })
+        expect(storage.defaultData()).toEqual({ meals: [], nextId: 1, goals: {}, days: [] })
     })
 })
 
@@ -148,30 +148,30 @@ describe("writeData", () => {
     it("creates the directory if it is missing", async () => {
         await rm(dataDir, { recursive: true, force: true })
 
-        await storage.writeData({ meals: [], nextId: 1 })
+        await storage.writeData({ meals: [], nextId: 1, goals: {}, days: [] })
 
         expect(existsSync(dataFile)).toBe(true)
     })
 
     it("writes indented JSON", async () => {
-        await storage.writeData({ meals: [makeMeal()], nextId: 2 })
+        await storage.writeData({ meals: [makeMeal()], nextId: 2, goals: {}, days: [] })
 
         expect(await readFile(dataFile, "utf-8")).toContain('\n  "nextId"')
     })
 
     it("overwrites rather than appends", async () => {
-        await storage.writeData({ meals: [makeMeal()], nextId: 2 })
-        await storage.writeData({ meals: [], nextId: 1 })
+        await storage.writeData({ meals: [makeMeal()], nextId: 2, goals: {}, days: [] })
+        await storage.writeData({ meals: [], nextId: 1, goals: {}, days: [] })
 
-        expect(await readRaw()).toEqual({ meals: [], nextId: 1 })
+        expect(await readRaw()).toEqual({ meals: [], nextId: 1, goals: {}, days: [] })
     })
 
     it("round-trips through a directory that already has content", async () => {
         await mkdir(dataDir, { recursive: true })
         const meals = [makeMeal({ id: 1 }), makeMeal({ id: 2, title: "rice" })]
 
-        await storage.writeData({ meals, nextId: 3 })
+        await storage.writeData({ meals, nextId: 3, goals: {}, days: [] })
 
-        expect(await storage.readData()).toEqual({ meals, nextId: 3 })
+        expect(await storage.readData()).toEqual({ meals, nextId: 3, goals: {}, days: [] })
     })
 })

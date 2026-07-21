@@ -83,10 +83,10 @@ const readData = async (): Promise<MealsData> =>
  * loadMenu does — a cached storage module is still bound to whichever temp
  * directory was live when it was first imported.
  */
-const seed = async (data: MealsData) => {
+const seed = async (data: Partial<MealsData>) => {
     vi.resetModules()
-    const { writeData } = await import("../src/storage.js")
-    await writeData(data)
+    const { writeData, defaultData } = await import("../src/storage.js")
+    await writeData({ ...defaultData(), ...data })
 }
 
 const meal = (over: Partial<MealsData["meals"][number]> = {}) => ({
@@ -404,6 +404,113 @@ describe("menu: today", () => {
     })
 })
 
+describe("menu: goals", () => {
+    it("stores what was entered", async () => {
+        queueSelect("goals", "exit")
+        queueText("2000", "180", "200", "60")
+
+        await (await loadMenu())()
+
+        const { getGoals } = await import("../src/commands.js")
+        expect(await getGoals()).toEqual({ cals: 2000, protein: 180, carbs: 200, fats: 60 })
+    })
+
+    it("treats a blank answer as leave-this-alone", async () => {
+        await seed({ goals: { protein: 180, cals: 2000 } })
+        queueSelect("goals", "exit")
+        queueText("", "", "200", "")
+
+        await (await loadMenu())()
+
+        const { getGoals } = await import("../src/commands.js")
+        expect(await getGoals()).toEqual({ protein: 180, cals: 2000, carbs: 200 })
+    })
+
+    it("pre-fills the prompt with the current target", async () => {
+        await seed({ goals: { protein: 180 } })
+        queueSelect("goals", "exit")
+        queueText("", "", "", "")
+
+        await (await loadMenu())()
+
+        const proteinPrompt = mocks.text.mock.calls
+            .map(([opts]) => opts as { message: string; placeholder?: string })
+            .find(o => o.message.startsWith("Protein target"))!
+
+        expect(proteinPrompt.placeholder).toBe("180")
+    })
+
+    it("asks for all four targets", async () => {
+        queueSelect("goals", "exit")
+        queueText("", "", "", "")
+
+        await (await loadMenu())()
+
+        expect(mocks.text).toHaveBeenCalledTimes(4)
+    })
+
+    it("validates entered targets", async () => {
+        queueSelect("goals", "exit")
+        queueText("", "", "", "")
+
+        await (await loadMenu())()
+
+        const validate = (mocks.text.mock.calls[0][0] as { validate: (v: string) => string | undefined }).validate
+        expect(validate("abc")).toBeTruthy()
+        expect(validate("-4")).toBeTruthy()
+        // Blank is how you skip, so it must not be rejected.
+        expect(validate("")).toBeUndefined()
+    })
+})
+
+describe("menu: today against goals", () => {
+    it("shows remaining once a goal is set", async () => {
+        const { todayLocalDate } = await import("../src/date.js")
+        await seed({
+            meals: [meal({ localDate: todayLocalDate() })],
+            nextId: 2,
+            goals: { protein: 180 },
+        })
+        queueSelect("today", "exit")
+
+        await (await loadMenu())()
+
+        const printed = mocks.logMessage.mock.calls.map(([line]) => line).join("\n")
+        expect(printed).toContain("166")
+        expect(printed).toContain("left")
+    })
+})
+
+describe("menu: history", () => {
+    const day = (date: string, hit: boolean | null) => ({
+        date,
+        totals: { protein: 100, carbs: 150, fats: 40, cals: 1500 },
+        goals: {},
+        hit,
+        mealCount: 2,
+        closedAt: "2026-07-19T00:00:00.000Z",
+    })
+
+    it("says so when nothing is closed", async () => {
+        queueSelect("history", "exit")
+
+        await (await loadMenu())()
+
+        const printed = mocks.logMessage.mock.calls.map(([line]) => line).join("\n")
+        expect(printed).toContain("No days closed yet")
+    })
+
+    it("lists closed days, most recent first", async () => {
+        await seed({ days: [day("2026-07-17", true), day("2026-07-18", false)] })
+        queueSelect("history", "exit")
+
+        await (await loadMenu())()
+
+        const printed = mocks.logMessage.mock.calls.map(([line]) => line).join("\n")
+        expect(printed.indexOf("2026-07-18")).toBeLessThan(printed.indexOf("2026-07-17"))
+    })
+})
+
 describe("menu: clear", () => {
     it("removes all meals and resets the counter", async () => {
         await seed({ meals: [meal(), meal({ id: 2, title: "rice" })], nextId: 3 })
@@ -411,7 +518,7 @@ describe("menu: clear", () => {
 
         await (await loadMenu())()
 
-        expect(await readData()).toEqual({ meals: [], nextId: 1 })
+        expect(await readData()).toEqual({ meals: [], nextId: 1, goals: {}, days: [] })
     })
 
     it("warns and writes nothing when there is nothing to clear", async () => {

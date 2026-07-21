@@ -9,7 +9,8 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "typecheck:src": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },

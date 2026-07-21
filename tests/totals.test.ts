@@ -29,10 +29,10 @@ const load = async () => {
     return import("../src/commands.js")
 }
 
-const seed = async (data: MealsData) => {
+const seed = async (data: Partial<MealsData>) => {
     vi.resetModules()
-    const { writeData } = await import("../src/storage.js")
-    await writeData(data)
+    const { writeData, defaultData } = await import("../src/storage.js")
+    await writeData({ ...defaultData(), ...data })
 }
 
 let nextId = 1
