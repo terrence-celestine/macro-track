@@ -1,16 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, rm } from "fs/promises";
+import { describe, it, expect, vi } from "vitest";
 import { existsSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 
-import type {
-  DayRecord,
-  Goals,
-  Macros,
-  Meal,
-  MealsData,
-} from "../src/types.js";
+import type { DayRecord, Goals, Macros, Meal } from "../src/types.js";
+import { useDataSandbox, freshModules } from "./helpers/data.js";
 
 /**
  * Day records freeze a finished day. Most of what matters is what stays frozen:
@@ -18,42 +10,14 @@ import type {
  * produce two records for one day.
  */
 
-let dataDir: string;
-
-beforeEach(async () => {
-  dataDir = await mkdtemp(join(tmpdir(), "macro-track-days-"));
-  process.env.MACRO_TRACK_DIR = dataDir;
-});
-
-afterEach(async () => {
-  vi.useRealTimers();
-  delete process.env.MACRO_TRACK_DIR;
-  await rm(dataDir, { recursive: true, force: true });
-});
+const { seed, readAll, dataFile } = useDataSandbox("days");
 
 const load = async () => {
-  vi.resetModules();
+  freshModules();
   return import("../src/days.js");
 };
 
-const seed = async (data: Partial<MealsData>) => {
-  vi.resetModules();
-  const { writeData, defaultData } = await import("../src/storage.js");
-  await writeData({ ...defaultData(), ...data });
-};
-
-const readAll = async (): Promise<MealsData> => {
-  vi.resetModules();
-  const { readData } = await import("../src/storage.js");
-  return readData();
-};
-
-const dataFile = () => join(dataDir, "macros.json");
-
 let nextId = 1;
-beforeEach(() => {
-  nextId = 1;
-});
 
 const meal = (over: Partial<Meal> = {}): Meal => ({
   id: nextId++,
@@ -66,7 +30,6 @@ const meal = (over: Partial<Meal> = {}): Meal => ({
   localDate: "2026-07-19",
   ...over,
 });
-
 const macros = (over: Partial<Macros> = {}): Macros => ({
   protein: 100,
   carbs: 150,

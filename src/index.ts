@@ -37,6 +37,7 @@ import {
 import { closeStaleDays, getHistory } from "./days.js";
 import {
   recordWeight,
+  removeWeight,
   getWeights,
   trailingAverage,
   trailingChange,
@@ -126,8 +127,15 @@ program
     console.log(formatWeighed(await recordWeight(weight)));
   });
 
-program
+const weight = program
   .command("weight")
+  .description("Recent weigh-ins and the trailing average");
+
+// isDefault keeps bare `weight` and `weight --days 5` working exactly as they
+// did before `remove` existed, rather than making listing a subcommand you have
+// to name.
+weight
+  .command("show", { isDefault: true })
   .description("Recent weigh-ins and the trailing average")
   .option("-d, --days <count>", "how many weigh-ins to list", parseGrams, 14)
   .action(async (options: { days: number }) => {
@@ -141,6 +149,20 @@ program
     )) {
       console.log(line);
     }
+  });
+
+weight
+  .command("remove")
+  .description("Forget one day's weigh-in")
+  .argument("<date>", "the local day, YYYY-MM-DD")
+  .action(async (date: string) => {
+    // `weigh` only ever overwrites today, so without this a bad reading on an
+    // earlier day could only be fixed by editing the JSON by hand.
+    if (!(await removeWeight(date))) {
+      fail(chalk.red(`No weigh-in recorded for ${date}.`));
+    }
+
+    console.log(chalk.green(`✓ Removed the weigh-in for ${date}`));
   });
 
 program

@@ -4,6 +4,24 @@ import { useCliSandbox, ADD_ARGS } from "./helpers/cli.js";
 
 const { run, readData, writeData } = useCliSandbox();
 
+/**
+ * Puts weigh-ins on specific days.
+ *
+ * Written straight to the file because `weigh` only ever records today — there
+ * is no CLI path that produces a multi-day series.
+ */
+const seedWeights = async (...days: [string, number][]) => {
+  // One real weigh-in first, so the data file exists to be rewritten.
+  await run("weigh", "180");
+  const data = await readData();
+  data.weights = days.map(([date, weight]) => ({
+    date,
+    weight,
+    recordedAt: `${date}T08:00:00.000Z`,
+  }));
+  await writeData(data);
+};
+
 describe("weigh", () => {
   it("records a weight and exits 0", async () => {
     const { code, stdout } = await run("weigh", "182.4");
@@ -72,27 +90,11 @@ describe("weight", () => {
   });
 
   it("averages across recorded days", async () => {
-    // Written directly because the CLI only ever records today.
-    await run("weigh", "180");
-    const data = await readData();
-    data.weights = [
-      {
-        date: "2026-07-17",
-        weight: 180,
-        recordedAt: "2026-07-17T08:00:00.000Z",
-      },
-      {
-        date: "2026-07-18",
-        weight: 182,
-        recordedAt: "2026-07-18T08:00:00.000Z",
-      },
-      {
-        date: "2026-07-19",
-        weight: 184,
-        recordedAt: "2026-07-19T08:00:00.000Z",
-      },
-    ];
-    await writeData(data);
+    await seedWeights(
+      ["2026-07-17", 180],
+      ["2026-07-18", 182],
+      ["2026-07-19", 184],
+    );
 
     const { stdout } = await run("weight");
 
@@ -100,21 +102,7 @@ describe("weight", () => {
   });
 
   it("lists newest first", async () => {
-    await run("weigh", "180");
-    const data = await readData();
-    data.weights = [
-      {
-        date: "2026-07-17",
-        weight: 180,
-        recordedAt: "2026-07-17T08:00:00.000Z",
-      },
-      {
-        date: "2026-07-19",
-        weight: 184,
-        recordedAt: "2026-07-19T08:00:00.000Z",
-      },
-    ];
-    await writeData(data);
+    await seedWeights(["2026-07-17", 180], ["2026-07-19", 184]);
 
     const { stdout } = await run("weight");
 
@@ -124,21 +112,7 @@ describe("weight", () => {
   });
 
   it("honours --days", async () => {
-    await run("weigh", "180");
-    const data = await readData();
-    data.weights = [
-      {
-        date: "2026-07-17",
-        weight: 180,
-        recordedAt: "2026-07-17T08:00:00.000Z",
-      },
-      {
-        date: "2026-07-19",
-        weight: 184,
-        recordedAt: "2026-07-19T08:00:00.000Z",
-      },
-    ];
-    await writeData(data);
+    await seedWeights(["2026-07-17", 180], ["2026-07-19", 184]);
 
     const { stdout } = await run("weight", "--days", "1");
 
@@ -162,5 +136,49 @@ describe("weight", () => {
     await run("clear");
 
     expect((await readData()).weights).toHaveLength(1);
+  });
+});
+
+describe("weight remove", () => {
+  it("forgets one day's weigh-in", async () => {
+    await seedWeights(["2026-07-17", 180], ["2026-07-19", 184]);
+
+    const { code } = await run("weight", "remove", "2026-07-17");
+
+    expect(code).toBe(0);
+    expect((await readData()).weights.map((w) => w.date)).toEqual([
+      "2026-07-19",
+    ]);
+  });
+
+  it("exits non-zero for a day with nothing recorded", async () => {
+    const { code, stderr } = await run("weight", "remove", "2020-01-01");
+
+    expect(code).not.toBe(0);
+    expect(stderr).toContain("2020-01-01");
+  });
+
+  it("requires a date", async () => {
+    expect((await run("weight", "remove")).code).not.toBe(0);
+  });
+
+  it("leaves the bare weight listing working", async () => {
+    // `show` is a default subcommand, so adding `remove` must not have turned
+    // plain `weight` into an unknown-command error.
+    await seedWeights(["2026-07-19", 184]);
+
+    const { code, stdout } = await run("weight");
+
+    expect(code).toBe(0);
+    expect(stdout).toContain("184");
+  });
+
+  it("leaves --days working on the bare listing", async () => {
+    await seedWeights(["2026-07-17", 180], ["2026-07-19", 184]);
+
+    const { stdout } = await run("weight", "--days", "1");
+
+    expect(stdout).toContain("2026-07-19");
+    expect(stdout).not.toContain("2026-07-17");
   });
 });

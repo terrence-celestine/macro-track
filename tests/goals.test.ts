@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
+import { describe, it, expect } from "vitest";
 
-import type { Goals, Meal, MealsData } from "../src/types.js";
+import type { Goals } from "../src/types.js";
+import { useDataSandbox, freshModules } from "./helpers/data.js";
+import { meal } from "./helpers/fixtures.js";
 
 /**
  * Goals merge rather than replace, so most of what matters here is what a
@@ -11,44 +10,17 @@ import type { Goals, Meal, MealsData } from "../src/types.js";
  * in-process suites — storage.ts binds its directory at import time.
  */
 
-let dataDir: string;
+const { seed, dataFile } = useDataSandbox("goals");
 
-beforeEach(async () => {
-  dataDir = await mkdtemp(join(tmpdir(), "macro-track-goals-"));
-  process.env.MACRO_TRACK_DIR = dataDir;
-});
-
-afterEach(async () => {
-  delete process.env.MACRO_TRACK_DIR;
-  await rm(dataDir, { recursive: true, force: true });
-});
+/** Writes the file byte-for-byte, for shapes seed() would fill in. */
+const writeRaw = async (json: string) =>
+  (await import("fs/promises")).writeFile(dataFile(), json, "utf-8");
 
 const load = async () => {
-  vi.resetModules();
+  freshModules();
   return import("../src/commands.js");
 };
 
-const seed = async (data: Partial<MealsData>) => {
-  vi.resetModules();
-  const { writeData, defaultData } = await import("../src/storage.js");
-  await writeData({ ...defaultData(), ...data });
-};
-
-const meal = (over: Partial<Meal> = {}): Meal => ({
-  id: 1,
-  title: "ground beef",
-  protein: 14,
-  carbs: 20,
-  fats: 6,
-  cals: 200,
-  createdAt: "2026-07-19T14:32:05.123Z",
-  localDate: "2026-07-19",
-  ...over,
-});
-
-// Annotated rather than inferred: excess-property checking only fires on object
-// literals assigned to a typed target, so an un-annotated fixture would happily
-// carry a field that no longer exists on Goals.
 const FULL_GOALS: Goals = { protein: 180, carbs: 200, fats: 60, cals: 2000 };
 
 describe("getGoals", () => {
@@ -61,11 +33,7 @@ describe("getGoals", () => {
   it("is empty for a data file written before goals existed", async () => {
     // Backward compatibility: storage merges over defaults, so an older
     // file with no goals key must still read cleanly.
-    await writeFile(
-      join(dataDir, "macros.json"),
-      JSON.stringify({ meals: [meal()], nextId: 2 }),
-      "utf-8",
-    );
+    await writeRaw(JSON.stringify({ meals: [meal()], nextId: 2 }));
     const { getGoals } = await load();
 
     expect(await getGoals()).toEqual({});

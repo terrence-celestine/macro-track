@@ -1,9 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, rm } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
+import { describe, it, expect, vi } from "vitest";
 
-import type { Meal, MealsData } from "../src/types.js";
+import type { Meal } from "../src/types.js";
+import { useDataSandbox, freshModules } from "./helpers/data.js";
 
 /**
  * Covers the day-scoping and summing that `today` is built on, in-process.
@@ -11,31 +9,15 @@ import type { Meal, MealsData } from "../src/types.js";
  * module graph and re-imports — same pattern as menu.test.ts.
  */
 
-let dataDir: string;
-
-beforeEach(async () => {
-  dataDir = await mkdtemp(join(tmpdir(), "macro-track-totals-"));
-  process.env.MACRO_TRACK_DIR = dataDir;
-});
-
-afterEach(async () => {
-  vi.useRealTimers();
-  delete process.env.MACRO_TRACK_DIR;
-  await rm(dataDir, { recursive: true, force: true });
-});
+const { seed } = useDataSandbox("totals");
 
 const load = async () => {
-  vi.resetModules();
+  freshModules();
   return import("../src/commands.js");
 };
 
-const seed = async (data: Partial<MealsData>) => {
-  vi.resetModules();
-  const { writeData, defaultData } = await import("../src/storage.js");
-  await writeData({ ...defaultData(), ...data });
-};
-
 let nextId = 1;
+
 const meal = (over: Partial<Meal> = {}): Meal => ({
   id: nextId++,
   title: "ground beef",
@@ -46,10 +28,6 @@ const meal = (over: Partial<Meal> = {}): Meal => ({
   createdAt: "2026-07-19T14:32:05.123Z",
   localDate: "2026-07-19",
   ...over,
-});
-
-beforeEach(() => {
-  nextId = 1;
 });
 
 describe("sumMacros", () => {

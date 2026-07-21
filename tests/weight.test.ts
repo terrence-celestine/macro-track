@@ -1,10 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, rm } from "fs/promises";
+import { describe, it, expect, vi } from "vitest";
 import { existsSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 
-import type { MealsData, WeighIn } from "../src/types.js";
+import type { WeighIn } from "../src/types.js";
+import { useDataSandbox, freshModules } from "./helpers/data.js";
+import { weighIn } from "./helpers/fixtures.js";
 
 /**
  * Weight is one number per local day. The interesting parts are same-day
@@ -13,41 +12,12 @@ import type { MealsData, WeighIn } from "../src/types.js";
  * window, not drag the mean toward nothing.
  */
 
-let dataDir: string;
-
-beforeEach(async () => {
-  dataDir = await mkdtemp(join(tmpdir(), "macro-track-weight-"));
-  process.env.MACRO_TRACK_DIR = dataDir;
-});
-
-afterEach(async () => {
-  vi.useRealTimers();
-  delete process.env.MACRO_TRACK_DIR;
-  await rm(dataDir, { recursive: true, force: true });
-});
+const { seed, readAll, dataFile } = useDataSandbox("weight");
 
 const load = async () => {
-  vi.resetModules();
+  freshModules();
   return import("../src/weight.js");
 };
-
-const seed = async (data: Partial<MealsData>) => {
-  vi.resetModules();
-  const { writeData, defaultData } = await import("../src/storage.js");
-  await writeData({ ...defaultData(), ...data });
-};
-
-const readAll = async (): Promise<MealsData> => {
-  vi.resetModules();
-  const { readData } = await import("../src/storage.js");
-  return readData();
-};
-
-const weighIn = (date: string, weight: number): WeighIn => ({
-  date,
-  weight,
-  recordedAt: `${date}T08:00:00.000Z`,
-});
 
 /** A run of consecutive days, oldest first. */
 const series = (weights: number[], startDay = 1): WeighIn[] =>
@@ -203,7 +173,7 @@ describe("removeWeight", () => {
 
     await removeWeight("2020-01-01");
 
-    expect(existsSync(join(dataDir, "macros.json"))).toBe(false);
+    expect(existsSync(dataFile())).toBe(false);
   });
 });
 

@@ -1,10 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, rm } from "fs/promises";
+import { describe, it, expect } from "vitest";
 import { existsSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 
-import type { DayRecord, Meal, MealsData } from "../src/types.js";
+import type { DayRecord } from "../src/types.js";
+import { useDataSandbox, freshModules } from "./helpers/data.js";
+import { meal, dayRecord } from "./helpers/fixtures.js";
 
 /**
  * Editing merges like `goal set` and is blocked on recorded days like `delete`.
@@ -12,55 +11,14 @@ import type { DayRecord, Meal, MealsData } from "../src/types.js";
  * touch: the id, the timestamp, and the day the meal counts toward.
  */
 
-let dataDir: string;
-
-beforeEach(async () => {
-  dataDir = await mkdtemp(join(tmpdir(), "macro-track-edit-"));
-  process.env.MACRO_TRACK_DIR = dataDir;
-});
-
-afterEach(async () => {
-  delete process.env.MACRO_TRACK_DIR;
-  await rm(dataDir, { recursive: true, force: true });
-});
+const { seed, readAll, dataFile } = useDataSandbox("edit");
 
 const load = async () => {
-  vi.resetModules();
+  freshModules();
   return import("../src/commands.js");
 };
 
-const seed = async (data: Partial<MealsData>) => {
-  vi.resetModules();
-  const { writeData, defaultData } = await import("../src/storage.js");
-  await writeData({ ...defaultData(), ...data });
-};
-
-const readAll = async (): Promise<MealsData> => {
-  vi.resetModules();
-  const { readData } = await import("../src/storage.js");
-  return readData();
-};
-
-const meal = (over: Partial<Meal> = {}): Meal => ({
-  id: 1,
-  title: "ground beef",
-  protein: 14,
-  carbs: 20,
-  fats: 6,
-  cals: 200,
-  createdAt: "2026-07-19T14:32:05.123Z",
-  localDate: "2026-07-19",
-  ...over,
-});
-
-const record = (date: string): DayRecord => ({
-  date,
-  totals: { protein: 14, carbs: 20, fats: 6, cals: 200 },
-  goals: {},
-  hit: null,
-  mealCount: 1,
-  closedAt: "2026-07-20T00:00:00.000Z",
-});
+const record = (date: string): DayRecord => dayRecord({ date });
 
 describe("editMeal", () => {
   it("changes a single macro", async () => {
@@ -187,7 +145,7 @@ describe("editMeal", () => {
 
     // A failed lookup is a read. Writing unchanged data back would create
     // the data file as a side effect of an operation that did nothing.
-    expect(existsSync(join(dataDir, "macros.json"))).toBe(false);
+    expect(existsSync(dataFile())).toBe(false);
   });
 
   it("refuses a meal whose day is recorded", async () => {

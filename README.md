@@ -72,6 +72,14 @@ Weight
 
 The window counts _recorded weigh-ins_, not calendar days. Skipping a Tuesday widens the window rather than dragging the average toward nothing.
 
+`weight remove <date>` forgets one day's reading. `weigh` only ever overwrites _today_, so without it a bad number on an earlier day could only be fixed by editing the JSON by hand.
+
+```bash
+npm start -- weight remove 2026-07-17
+```
+
+`weight` on its own still lists — `show` is a default subcommand, so `weight` and `weight --days 5` behave exactly as before `remove` existed.
+
 Weigh-ins survive `clear`, like goals do.
 
 ### `history`

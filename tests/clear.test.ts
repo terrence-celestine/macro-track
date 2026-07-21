@@ -1,15 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, rm } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
+import { describe, it, expect } from "vitest";
 
-import type {
-  DayRecord,
-  Favorite,
-  Meal,
-  MealsData,
-  WeighIn,
-} from "../src/types.js";
+import type { MealsData } from "../src/types.js";
+import { useDataSandbox, freshModules } from "./helpers/data.js";
+import {
+  meal,
+  dayRecord,
+  favorite as makeFavorite,
+  weighIn as makeWeighIn,
+} from "./helpers/fixtures.js";
 
 /**
  * `clear` empties the meal log. These tests exist to pin what it must *not*
@@ -21,70 +19,20 @@ import type {
  * existing test cleared a file that had nothing else in it.
  */
 
-let dataDir: string;
-
-beforeEach(async () => {
-  dataDir = await mkdtemp(join(tmpdir(), "macro-track-clear-"));
-  process.env.MACRO_TRACK_DIR = dataDir;
-});
-
-afterEach(async () => {
-  delete process.env.MACRO_TRACK_DIR;
-  await rm(dataDir, { recursive: true, force: true });
-});
+const { seed, readAll } = useDataSandbox("clear");
 
 const load = async () => {
-  vi.resetModules();
+  freshModules();
   return import("../src/meals.js");
 };
 
-const seed = async (data: Partial<MealsData>) => {
-  vi.resetModules();
-  const { writeData, defaultData } = await import("../src/storage.js");
-  await writeData({ ...defaultData(), ...data });
-};
-
-const readAll = async (): Promise<MealsData> => {
-  vi.resetModules();
-  const { readData } = await import("../src/storage.js");
-  return readData();
-};
-
-const meal = (over: Partial<Meal> = {}): Meal => ({
-  id: 1,
-  title: "ground beef",
-  protein: 14,
-  carbs: 20,
-  fats: 6,
-  cals: 200,
-  createdAt: "2026-07-19T14:32:05.123Z",
-  localDate: "2026-07-19",
-  ...over,
-});
-
-const record: DayRecord = {
-  date: "2026-07-18",
-  totals: { protein: 14, carbs: 20, fats: 6, cals: 200 },
+const record = dayRecord({
   goals: { protein: 180 },
   hit: false,
-  mealCount: 1,
   closedAt: "2026-07-19T00:00:00.000Z",
-};
-
-const favorite: Favorite = {
-  name: "beef",
-  protein: 14,
-  carbs: 20,
-  fats: 6,
-  cals: 200,
-  createdAt: "2026-07-19T14:32:05.123Z",
-};
-
-const weighIn: WeighIn = {
-  date: "2026-07-19",
-  weight: 182.4,
-  recordedAt: "2026-07-19T08:00:00.000Z",
-};
+});
+const favorite = makeFavorite();
+const weighIn = makeWeighIn("2026-07-19", 182.4);
 
 /** Everything a fully-populated data file holds. */
 const populated = (): Partial<MealsData> => ({
