@@ -29,7 +29,12 @@ type Result = { code: number; stdout: string; stderr: string }
  * function to pass a path to across a process boundary.
  */
 async function run(...args: string[]): Promise<Result> {
-    const env = { ...process.env, MACRO_TRACK_DIR: dataDir, NO_COLOR: "1" }
+    return runWithEnv({}, ...args)
+}
+
+/** Same as run, with extra environment variables layered on — TZ, mainly. */
+async function runWithEnv(extra: Record<string, string>, ...args: string[]): Promise<Result> {
+    const env = { ...process.env, MACRO_TRACK_DIR: dataDir, NO_COLOR: "1", ...extra }
     try {
         const { stdout, stderr } = await exec(TSX, [CLI, ...args], { env })
         return { code: 0, stdout, stderr }
@@ -38,6 +43,12 @@ async function run(...args: string[]): Promise<Result> {
         return { code: e.code ?? 1, stdout: e.stdout ?? "", stderr: e.stderr ?? "" }
     }
 }
+
+/** What the local day is in a given timezone, right now. "en-CA" is YYYY-MM-DD. */
+const localDayIn = (timeZone: string) =>
+    new Intl.DateTimeFormat("en-CA", {
+        timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date())
 
 const readData = async (): Promise<MealsData> =>
     JSON.parse(await readFile(join(dataDir, "macros.json"), "utf-8"))
@@ -73,6 +84,33 @@ describe("add", () => {
 
         const { createdAt } = (await readData()).meals[0]
         expect(Number.isNaN(Date.parse(createdAt))).toBe(false)
+    })
+
+    it("stamps a localDate in YYYY-MM-DD form", async () => {
+        await run(...ADD_ARGS)
+
+        const { localDate } = (await readData()).meals[0]
+        expect(localDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    })
+
+    it("records the local day of the machine's timezone", async () => {
+        const tz = "America/New_York"
+        await runWithEnv({ TZ: tz }, ...ADD_ARGS)
+
+        expect((await readData()).meals[0].localDate).toBe(localDayIn(tz))
+    })
+
+    it("files the same instant under different days in different timezones", async () => {
+        // Kiritimati is UTC+14 and Midway UTC-11, so the two are never on the
+        // same calendar day. If localDate were derived from the UTC timestamp
+        // these would match — and a 9pm dinner would land on tomorrow's totals.
+        await runWithEnv({ TZ: "Pacific/Kiritimati" }, ...ADD_ARGS)
+        await runWithEnv({ TZ: "Pacific/Midway" }, "add", "rice", "-p", "4", "-c", "45", "-f", "1", "-k", "200")
+
+        const [ahead, behind] = (await readData()).meals
+        expect(ahead.localDate).toBe(localDayIn("Pacific/Kiritimati"))
+        expect(behind.localDate).toBe(localDayIn("Pacific/Midway"))
+        expect(ahead.localDate).not.toBe(behind.localDate)
     })
 
     it("increments ids across meals", async () => {

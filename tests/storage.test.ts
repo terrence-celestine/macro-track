@@ -41,6 +41,7 @@ const makeMeal = (over: Partial<MealsData["meals"][number]> = {}) => ({
     fats: 6,
     cals: 200,
     createdAt: "2026-07-19T14:32:05.123Z",
+    localDate: "2026-07-19",
     ...over,
 })
 

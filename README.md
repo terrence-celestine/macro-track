@@ -71,14 +71,19 @@ Meals are stored as JSON at `~/.macro-track/macros.json`:
       "cals": 200,
       "carbs": 20,
       "fats": 6,
-      "createdAt": "2026-07-19T14:32:05.123Z"
+      "createdAt": "2026-07-19T14:32:05.123Z",
+      "localDate": "2026-07-19"
     }
   ],
   "nextId": 2
 }
 ```
 
-`createdAt` is a UTC ISO timestamp.
+`createdAt` is a UTC ISO timestamp, kept as the precise instant for ordering.
+
+`localDate` is the local calendar day, `YYYY-MM-DD`, and is the field day grouping reads. The two disagree for exactly the meals that matter most: a 9pm dinner in New York is already tomorrow in UTC, so grouping on `createdAt` would file an entire evening under the next day's totals. Stored as a string because it sorts chronologically as-is.
+
+Both are stamped from a single `Date` at write time, so they cannot disagree across a midnight boundary.
 
 Missing keys fall back to defaults on read, so adding fields to the data shape won't break existing files.
 
@@ -88,7 +93,11 @@ Missing keys fall back to defaults on read, so adding fields to the data shape w
 | --- | --- |
 | `src/types.ts` | `Macros`, `Meal`, `MealsData` |
 | `src/storage.ts` | Reading and writing the JSON file |
-| `src/index.ts` | Command definitions, flag parsing, output |
+| `src/date.ts` | Local-day formatting (`toLocalDate`, `todayLocalDate`) |
+| `src/validate.ts` | Macro-value rules, shared by the flags and the menu |
+| `src/commands.ts` | The work behind each command, plus output formatting |
+| `src/menu.ts` | The interactive menu shown when run with no arguments |
+| `src/index.ts` | Command definitions, flag parsing, entry-point dispatch |
 
 `Macros` holds the four numeric fields; `Meal` intersects it with `id`, `title`, and `createdAt`, so meals, goals, and daily totals all share one definition.
 
@@ -107,8 +116,10 @@ TypeScript, Node, [commander](https://github.com/tj/commander.js) for parsing, [
 ## Roadmap
 
 - [x] `Macros` shared type across meals, goals, and daily totals
+- [x] Local-date field on meals so evening meals aren't filed under the next UTC day
+- [ ] `today` — running totals for the local day
 - [ ] `goal set` — daily macro targets, stored in the data file
+- [ ] `today` against goals — remaining macros and a `hit` verdict
 - [ ] Day records — totals, goals snapshot, and a `hit` verdict frozen per day
 - [ ] Lazy day close on the first command of a new day
-- [ ] `today` — running totals against the day's goals
-- [ ] Local-date field on meals so evening meals aren't filed under the next UTC day
+- [ ] `delete <id>` — remove a single meal, so a typo doesn't need `clear`

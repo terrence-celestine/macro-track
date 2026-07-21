@@ -8,6 +8,7 @@
 
 import chalk from "chalk"
 import { defaultData, readData, writeData } from "./storage.js"
+import { toLocalDate } from "./date.js"
 import { type Meal } from "./types.js"
 
 export type MealInput = {
@@ -21,6 +22,10 @@ export type MealInput = {
 export const addMeal = async (input: MealInput): Promise<Meal> => {
     const data = await readData()
 
+    // One Date for both fields, so the timestamp and the day bucket can never
+    // disagree across a midnight boundary.
+    const now = new Date()
+
     const meal: Meal = {
         id: data.nextId,
         title: input.title,
@@ -28,7 +33,8 @@ export const addMeal = async (input: MealInput): Promise<Meal> => {
         protein: input.protein,
         carbs: input.carbs,
         fats: input.fats,
-        createdAt: new Date().toISOString(),
+        createdAt: now.toISOString(),
+        localDate: toLocalDate(now),
     }
 
     data.meals.push(meal)

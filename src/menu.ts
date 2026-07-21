@@ -78,10 +78,8 @@ async function runClear(): Promise<void> {
     log.success(chalk.green("You cleared all your meals"))
 }
 
-export async function runMenu(): Promise<void> {
-    intro(chalk.bgGreen.black(" macro-track "))
-
-    const action = exitIfCancelled(
+const promptAction = async (): Promise<Action> =>
+    exitIfCancelled(
         await select<Action>({
             message: "What do you want to do?",
             options: [
@@ -93,18 +91,33 @@ export async function runMenu(): Promise<void> {
         }),
     )
 
-    switch (action) {
-        case "add":
-            await runAdd()
-            break
-        case "list":
-            await runList()
-            break
-        case "clear":
-            await runClear()
-            break
-        case "exit":
-            break
+/**
+ * intro/outro are once per session; the prompt and the action are once per
+ * iteration. Looping rather than recursing keeps that split honest — a nested
+ * runMenu() would reprint the banner on the way in and stack up an outro on
+ * the way out, one per level.
+ */
+export const runMenu = async (): Promise<void> => {
+    intro(chalk.bgGreen.black(" macro-track "))
+
+    let running = true
+    while (running) {
+        const action = await promptAction()
+
+        switch (action) {
+            case "add":
+                await runAdd()
+                break
+            case "list":
+                await runList()
+                break
+            case "clear":
+                await runClear()
+                break
+            case "exit":
+                running = false
+                break
+        }
     }
 
     outro("Done.")
