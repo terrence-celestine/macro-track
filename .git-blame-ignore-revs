@@ -8,8 +8,16 @@
 #
 #   git config blame.ignoreRevsFile .git-blame-ignore-revs
 #
-# Add the full 40-character hash of the reformat commit below once it exists.
-# A short hash or a missing commit makes git blame fail outright, so add it
-# only after committing.
+# Hashes must be the full 40 characters — a short hash or one git cannot find
+# makes `git blame` fail outright rather than degrade.
+#
+# To add a future one: commit the reformat on its own, then
+#
+#   git rev-parse HEAD
+#
+# and paste the result here in a *separate* follow-up commit. Amending the
+# reformat to include this file would change its hash and invalidate the line
+# you just wrote.
 
-# Adopt Prettier defaults across the codebase
+# fix: Added prettier and formatted all files
+8d64747b61d945cc730878a576dda627c2234266

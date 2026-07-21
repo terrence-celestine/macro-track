@@ -80,6 +80,8 @@ npm start -- weight remove 2026-07-17
 
 `weight` on its own still lists — `show` is a default subcommand, so `weight` and `weight --days 5` behave exactly as before `remove` existed.
 
+The menu has **Remove a weigh-in**, which lists recent readings newest first, since a reading worth dropping is almost always a recent one.
+
 Weigh-ins survive `clear`, like goals do.
 
 ### `history`
@@ -204,7 +206,7 @@ npm start -- repeat beef
 
 The new meal gets a fresh id, a fresh timestamp and today's local date, exactly as if you'd typed it by hand. The favorite stays saved.
 
-In the menu, **Log a favorite** picks from your saved list, and **Save a favorite** keeps one of today's meals for later.
+In the menu, **Log a favorite** picks from your saved list, **Save a favorite** keeps one of today's meals for later, and **Remove a favorite** forgets one. Removing a favorite does not touch meals already logged from it.
 
 ### `edit <id>`
 
@@ -260,6 +262,10 @@ An empty log prints "no meals to clear" and stops, rather than also claiming it 
 Running `macro-track` with no arguments opens an arrow-key menu — but only when stdin is a terminal. In a cron job, a script, or anything piped, it prints help instead. The menu reads keypresses, so without a terminal it would otherwise wait forever for input that never arrives.
 
 Prompt sequences (add, edit, goals) run through clack's `group`, so Ctrl+C at any step ends the session through a single handler rather than each prompt checking for itself.
+
+One table in `menu.ts` drives both the list of options and the dispatch, so an entry cannot end up listed but unhandled. The entry without a `run` is Exit — the one action that ends the loop rather than doing work.
+
+Anything destructive confirms first and defaults to no.
 
 ## Data
 

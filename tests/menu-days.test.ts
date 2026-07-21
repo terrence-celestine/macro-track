@@ -11,6 +11,7 @@ import {
   mocks,
   meal,
   queueSelect,
+  queueConfirm,
   queueText,
 } from "./helpers/menu.js";
 
@@ -260,6 +261,89 @@ describe("menu: weight", () => {
       .join("\n");
     expect(printed).toContain("182");
     expect(printed).toContain("2026-07-19");
+  });
+});
+
+describe("menu: remove weigh-in", () => {
+  const weighIn = (date: string, weight: number) => ({
+    date,
+    weight,
+    recordedAt: `${date}T08:00:00.000Z`,
+  });
+
+  it("says so when there are none", async () => {
+    queueSelect("unweigh", "exit");
+
+    await (
+      await loadMenu()
+    )();
+
+    expect(mocks.logWarn).toHaveBeenCalledWith(
+      expect.stringContaining("No weigh-ins to remove"),
+    );
+  });
+
+  it("forgets the chosen day once confirmed", async () => {
+    await seed({
+      weights: [weighIn("2026-07-18", 183), weighIn("2026-07-19", 182)],
+    });
+    queueSelect("unweigh", "2026-07-18", "exit");
+    queueConfirm(true);
+
+    await (
+      await loadMenu()
+    )();
+
+    expect((await readData()).weights.map((w) => w.date)).toEqual([
+      "2026-07-19",
+    ]);
+  });
+
+  it("keeps it when the confirm is declined", async () => {
+    await seed({ weights: [weighIn("2026-07-19", 182)] });
+    queueSelect("unweigh", "2026-07-19", "exit");
+    queueConfirm(false);
+
+    await (
+      await loadMenu()
+    )();
+
+    expect((await readData()).weights).toHaveLength(1);
+  });
+
+  it("defaults the confirm to no", async () => {
+    await seed({ weights: [weighIn("2026-07-19", 182)] });
+    queueSelect("unweigh", "2026-07-19", "exit");
+    queueConfirm(false);
+
+    await (
+      await loadMenu()
+    )();
+
+    // Enter-by-reflex should not discard a reading.
+    const [opts] = mocks.confirm.mock.calls[0] as [{ initialValue: boolean }];
+    expect(opts.initialValue).toBe(false);
+  });
+
+  it("offers the newest weigh-in first", async () => {
+    await seed({
+      weights: [weighIn("2026-07-17", 184), weighIn("2026-07-19", 182)],
+    });
+    queueSelect("unweigh", "2026-07-19", "exit");
+    queueConfirm(false);
+
+    await (
+      await loadMenu()
+    )();
+
+    // A reading worth dropping is almost always a recent one.
+    const [opts] = mocks.select.mock.calls[1] as [
+      { options: { label: string }[] },
+    ];
+    expect(opts.options.map((o) => o.label)).toEqual([
+      "2026-07-19",
+      "2026-07-17",
+    ]);
   });
 });
 

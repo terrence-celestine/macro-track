@@ -10,6 +10,7 @@ import {
   mocks,
   meal,
   queueSelect,
+  queueConfirm,
   queueText,
 } from "./helpers/menu.js";
 
@@ -72,6 +73,84 @@ describe("menu: repeat", () => {
     )();
 
     expect(mocks.confirm).not.toHaveBeenCalled();
+  });
+});
+
+describe("menu: remove favorite", () => {
+  const fav = (name: string) => ({
+    name,
+    protein: 14,
+    carbs: 20,
+    fats: 6,
+    cals: 200,
+    createdAt: "2026-07-19T14:32:05.123Z",
+  });
+
+  it("says so when there are none", async () => {
+    queueSelect("unfavorite", "exit");
+
+    await (
+      await loadMenu()
+    )();
+
+    expect(mocks.logWarn).toHaveBeenCalledWith(
+      expect.stringContaining("No favorites to remove"),
+    );
+  });
+
+  it("forgets the chosen favorite once confirmed", async () => {
+    await seed({ favorites: [fav("beef"), fav("rice")] });
+    queueSelect("unfavorite", "beef", "exit");
+    queueConfirm(true);
+
+    await (
+      await loadMenu()
+    )();
+
+    expect((await readData()).favorites.map((f) => f.name)).toEqual(["rice"]);
+  });
+
+  it("keeps it when the confirm is declined", async () => {
+    await seed({ favorites: [fav("beef")] });
+    queueSelect("unfavorite", "beef", "exit");
+    queueConfirm(false);
+
+    await (
+      await loadMenu()
+    )();
+
+    expect((await readData()).favorites).toHaveLength(1);
+  });
+
+  it("defaults the confirm to no", async () => {
+    await seed({ favorites: [fav("beef")] });
+    queueSelect("unfavorite", "beef", "exit");
+    queueConfirm(false);
+
+    await (
+      await loadMenu()
+    )();
+
+    const [opts] = mocks.confirm.mock.calls[0] as [{ initialValue: boolean }];
+    expect(opts.initialValue).toBe(false);
+  });
+
+  it("leaves meals logged from it alone", async () => {
+    const { todayLocalDate } = await import("../src/date.js");
+    await seed({
+      meals: [meal({ id: 1, localDate: todayLocalDate() })],
+      nextId: 2,
+      favorites: [fav("beef")],
+    });
+    queueSelect("unfavorite", "beef", "exit");
+    queueConfirm(true);
+
+    await (
+      await loadMenu()
+    )();
+
+    // Forgetting the shortcut does not un-eat the food.
+    expect((await readData()).meals).toHaveLength(1);
   });
 });
 
