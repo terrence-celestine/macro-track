@@ -23,7 +23,7 @@ import {
 } from "./commands.js"
 import { getHistory } from "./days.js"
 import { validateGrams } from "./validate.js"
-import { type Goals, type Meal } from "./types.js"
+import { type Goals, type Macros, type Meal } from "./types.js"
 
 type Action = "today" | "add" | "repeat" | "favorite" | "edit" | "delete" | "goals" | "history" | "list" | "clear" | "exit"
 
@@ -65,6 +65,15 @@ const optionalGramsPrompt = (label: string, current: number | undefined) =>
         defaultValue: "",
         validate: (input) => (input?.trim() ? validateGrams(input) : undefined),
     })
+
+/**
+ * The one-line macro summary under a select option.
+ *
+ * Takes Macros rather than Meal so the meal pickers and the favourites picker
+ * share it — they were three copies of the same template literal.
+ */
+const macroHint = (m: Macros): string =>
+    `${m.cals} kcal · P ${m.protein}g · C ${m.carbs}g · F ${m.fats}g`
 
 /** Blank answers mean "unchanged", so they become undefined rather than 0. */
 const optionalNumber = (value: string): number | undefined =>
@@ -153,7 +162,7 @@ async function pickOpenMeal(message: string): Promise<Meal | null> {
             options: meals.map(meal => ({
                 value: meal.id,
                 label: meal.title,
-                hint: `${meal.cals} kcal · P ${meal.protein}g · C ${meal.carbs}g · F ${meal.fats}g`,
+                hint: macroHint(meal),
             })),
         }),
     )
@@ -175,7 +184,7 @@ async function runRepeat(): Promise<void> {
             options: favorites.map(favorite => ({
                 value: favorite.name,
                 label: favorite.name,
-                hint: `${favorite.cals} kcal · P ${favorite.protein}g · C ${favorite.carbs}g · F ${favorite.fats}g`,
+                hint: macroHint(favorite),
             })),
         }),
     )
@@ -212,7 +221,7 @@ async function runSaveFavorite(): Promise<void> {
             options: meals.map(meal => ({
                 value: meal.id,
                 label: meal.title,
-                hint: `${meal.cals} kcal · P ${meal.protein}g · C ${meal.carbs}g · F ${meal.fats}g`,
+                hint: macroHint(meal),
             })),
         }),
     )

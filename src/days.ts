@@ -9,7 +9,7 @@
 
 import { readData, writeData } from "./storage.js"
 import { todayLocalDate } from "./date.js"
-import { sumMacros } from "./commands.js"
+import { sumMacros } from "./meals.js"
 import { type DayRecord, type Goals, type Macros, type Meal } from "./types.js"
 
 /**

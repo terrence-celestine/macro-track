@@ -257,9 +257,15 @@ program.command('delete')
 program.command('clear')
     .description("Clear all meals")
     .action(async () => {
-        const meals = await listMeals();
-        if (meals.length === 0)
+        const meals = await listMeals()
+
+        // The return is the point: without it this printed "no meals to clear"
+        // and "you cleared all your meals" back to back.
+        if (meals.length === 0) {
             console.log(chalk.red(`You have no meals to clear, add a meal first`))
+            return
+        }
+
         await clearMeals()
         console.log(chalk.green(`You cleared all your meals`))
     })
