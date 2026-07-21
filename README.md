@@ -329,26 +329,30 @@ Missing keys fall back to defaults on read, so adding fields to the data shape w
 
 ## Source
 
-| File               | Responsibility                                                  |
-| ------------------ | --------------------------------------------------------------- |
-| `src/types.ts`     | `Macros`, `Meal`, `Goals`, `DayRecord`, `Favorite`, `MealsData` |
-| `src/storage.ts`   | Reading and writing the JSON file                               |
-| `src/date.ts`      | Local-day formatting (`toLocalDate`, `todayLocalDate`)          |
-| `src/util.ts`      | `definedOnly`, the undefined-stripping both merges need         |
-| `src/validate.ts`  | Macro-value rules, shared by the flags and the menu             |
-| `src/meals.ts`     | Logging, reading, editing and deleting meals; `sumMacros`       |
-| `src/favorites.ts` | Named saved meals and `repeat`                                  |
-| `src/goals.ts`     | Daily targets                                                   |
-| `src/days.ts`      | Goal direction, hit verdict, lazy close, history                |
-| `src/weight.ts`    | Weigh-ins and the trailing average                              |
-| `src/format.ts`    | Every line the tool prints                                      |
-| `src/commands.ts`  | Re-export barrel over the four above                            |
-| `src/menu.ts`      | The interactive menu shown when run with no arguments           |
-| `src/index.ts`     | Command definitions, flag parsing, entry-point dispatch         |
+| File                    | Responsibility                                                  |
+| ----------------------- | --------------------------------------------------------------- |
+| `src/types.ts`          | `Macros`, `Meal`, `Goals`, `DayRecord`, `Favorite`, `MealsData` |
+| `src/storage.ts`        | Reading and writing the JSON file                               |
+| `src/date.ts`           | Local-day formatting (`toLocalDate`, `todayLocalDate`)          |
+| `src/util.ts`           | `definedOnly`, the undefined-stripping both merges need         |
+| `src/validate.ts`       | Macro-value rules, shared by the flags and the menu             |
+| `src/meals.ts`          | Logging, reading, editing and deleting meals; `sumMacros`       |
+| `src/favorites.ts`      | Named saved meals and `repeat`                                  |
+| `src/goals.ts`          | Daily targets                                                   |
+| `src/days.ts`           | Goal direction, hit verdict, lazy close, history                |
+| `src/weight.ts`         | Weigh-ins and the trailing average                              |
+| `src/format.ts`         | Every line the tool prints                                      |
+| `src/commands.ts`       | Re-export barrel over the five modules above                    |
+| `src/menu.ts`           | Menu entry point: the action table and dispatch loop            |
+| `src/menu-prompts.ts`   | Prompt primitives, including the generic `pickFrom`             |
+| `src/menu-meals.ts`     | Menu actions over the meal log                                  |
+| `src/menu-favorites.ts` | Menu actions over saved favorites                               |
+| `src/menu-tracking.ts`  | Menu actions over goals, weight and history                     |
+| `src/index.ts`          | Command definitions, flag parsing, entry-point dispatch         |
 
 Dependencies run one way: `format` and `days` sit on top of `meals`, `favorites` and `goals`, which sit on `storage`. Nothing imports the barrel except `index` and `menu` — new code is better off importing the specific module, since the import line then says which area it depends on.
 
-`Macros` holds the four numeric fields; `Meal` intersects it with `id`, `title`, and `createdAt`, so meals, goals, and daily totals all share one definition.
+`Macros` holds the four numeric fields; `Meal` intersects it with `id`, `title`, `createdAt` and `localDate`, so meals, goals, daily totals and favorites all share one definition.
 
 ## Scripts
 
@@ -358,6 +362,7 @@ npm run dev              # run with watch
 npm run typecheck        # src + tests
 npm run typecheck:src    # src only, what a build would check
 npm test                 # vitest run
+npm run test:watch       # vitest, watching
 npm run format           # prettier --write .
 npm run format:check     # prettier --check .
 ```
